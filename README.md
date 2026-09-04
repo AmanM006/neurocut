@@ -3,6 +3,11 @@
 > **Autonomous Video Editing with Reinforcement Learning Timeline Optimization, ClickHouse Reward Oracle, and Google ADK Showrunner Intervention**
 > *Built for the Google Cloud Agentic Cinema Hackathon (ClickHouse Partner Track)*
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AmanM006/neurocut/blob/main/notebooks/qwen_swarm_colab.ipynb)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![ClickHouse Cloud](https://img.shields.io/badge/ClickHouse-Cloud-orange.svg)](https://clickhouse.com/cloud)
+[![Google ADK](https://img.shields.io/badge/Google-ADK%20%26%20Gemini-blue.svg)](https://ai.google.dev/)
+
 ---
 
 ## 🌟 Executive Summary
@@ -159,6 +164,17 @@ To run the entire stack (FastAPI Backend, Next.js Frontend, and ClickHouse Serve
 ```bash
 docker-compose -f infra/docker-compose.yml up --build
 ```
+
+---
+
+## 🚀 Phase 2: Real Qwen 2.5-VL GPU Inference on Google Colab
+
+To run real Vision-Language Model inference with **`Qwen/Qwen2.5-VL-3B-Instruct`** on an NVIDIA T4/A100 GPU:
+
+1. Click the **[Open In Colab](https://colab.research.google.com/github/AmanM006/neurocut/blob/main/notebooks/qwen_swarm_colab.ipynb)** badge.
+2. Select **Runtime** → **Change runtime type** → **T4 GPU**.
+3. Run all cells: the notebook loads `Qwen2_5_VLForConditionalGeneration`, extracts 2 FPS frames, prompts the 4 audience personas, and streams real token-predicted telemetry curves into ClickHouse Cloud!
+4. The local Neuro-Cut frontend dashboard queries ClickHouse Cloud in real time and renders the real VLM curves side-by-side!
 
 ---
 

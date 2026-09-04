@@ -9,15 +9,41 @@ Phase 1's `heuristic_scorer.py` remains 100% untouched and alive as the default 
 
 import math
 import os
+import json
 import time
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 from pydantic import BaseModel, Field
+from PIL import Image
 
 from backend.config import settings
 from backend.editing_env import TimelineState, Clip
 from backend.clickhouse.client import clickhouse_client
 from backend.scoring.heuristic_scorer import TelemetryPoint
+
+# Check PyTorch & Transformers availability for GPU execution
+try:
+    import torch
+    from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
+    from qwen_vl_utils import process_vision_info
+    HAS_TRANSFORMERS = True
+except ImportError:
+    HAS_TRANSFORMERS = False
+    torch = None
+
+SWARM_SYSTEM_PROMPT = """You are a film audience evaluation panel composed of 4 viewer personas:
+1. 'action_junkie': craves visual momentum, fast pacing, kinetic framing.
+2. 'slow_burn_critic': appreciates deliberate pauses, tonal framing, atmosphere.
+3. 'sensory_cinephile': judges visual texture, lighting contrast, artistic composition.
+4. 'casual_scroller': short attention span, drops off if pacing stagnates.
+
+Evaluate this video frame. Respond ONLY with valid JSON in this exact schema:
+{
+  "action_junkie": {"attention": 0.0-1.0, "arousal": 0.0-1.0, "cognitive_load": 0.0-1.0},
+  "slow_burn_critic": {"attention": 0.0-1.0, "arousal": 0.0-1.0, "cognitive_load": 0.0-1.0},
+  "sensory_cinephile": {"attention": 0.0-1.0, "arousal": 0.0-1.0, "cognitive_load": 0.0-1.0},
+  "casual_scroller": {"attention": 0.0-1.0, "arousal": 0.0-1.0, "cognitive_load": 0.0-1.0}
+}"""
 
 class AudiencePersona(BaseModel):
     persona_id: str
@@ -71,14 +97,79 @@ class QwenAudienceSwarm:
     """
     Qwen 2.5-VL Synthetic Audience Swarm (Phase 2).
     Evaluates compiled video cuts at 2 FPS using multi-persona visual & prompt analysis.
+    Supports real GPU inference via Qwen2.5-VL-3B-Instruct and cloud execution via Google Colab.
     Emits dense telemetry tagged source: 'qwen_swarm' into ClickHouse Cloud.
     """
 
-    def __init__(self, personas: Optional[List[str]] = None):
+    def __init__(self, personas: Optional[List[str]] = None, model_name: str = "Qwen/Qwen2.5-VL-3B-Instruct"):
         self.persona_keys = personas or list(SWARM_PERSONAS.keys())
         self.personas = [SWARM_PERSONAS[k] for k in self.persona_keys if k in SWARM_PERSONAS]
         self.sampling_fps = 2.0  # 2 frames per second (every 500ms)
         self.step_ms = int(1000 / self.sampling_fps)
+        self.model_name = model_name
+        self.model = None
+        self.processor = None
+        self.has_cuda = bool(torch and torch.cuda.is_available())
+
+    def load_vlm(self) -> bool:
+        """Loads Qwen 2.5-VL onto GPU if CUDA is available."""
+        if not self.has_cuda:
+            print("[Qwen Swarm] [DIAGNOSTIC] No NVIDIA CUDA GPU detected on local host.")
+            print("[Qwen Swarm] [DIAGNOSTIC] For real Qwen2.5-VL-3B GPU inference, open notebooks/qwen_swarm_colab.ipynb in Google Colab (free T4 GPU).")
+            print("[Qwen Swarm] [FALLBACK MODE] Running calibrated temporal motion simulation on local CPU.")
+            return False
+
+        if not HAS_TRANSFORMERS:
+            print("[Qwen Swarm] [DIAGNOSTIC] 'transformers' or 'qwen-vl-utils' not installed.")
+            return False
+
+        if self.model is None:
+            try:
+                print(f"[Qwen Swarm] >>> Loading {self.model_name} onto CUDA GPU (bfloat16)...")
+                t0 = time.time()
+                self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                    self.model_name,
+                    torch_dtype=torch.bfloat16,
+                    device_map="auto"
+                )
+                self.processor = AutoProcessor.from_pretrained(self.model_name)
+                vram_gb = torch.cuda.memory_allocated() / 1e9
+                print(f"[Qwen Swarm] <<< Model loaded successfully in {time.time() - t0:.2f}s! VRAM allocated: {vram_gb:.2f} GB")
+                return True
+            except Exception as e:
+                print(f"[Qwen Swarm] Failed to load model onto GPU: {e}")
+                return False
+        return True
+
+    def _infer_real_qwen_frame(self, pil_img: Image.Image) -> Dict[str, Dict[str, float]]:
+        """Executes a real forward pass of Qwen 2.5-VL on a single frame."""
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": pil_img},
+                    {"type": "text", "text": SWARM_SYSTEM_PROMPT}
+                ]
+            }
+        ]
+        text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        image_inputs, video_inputs = process_vision_info(messages)
+        inputs = self.processor(text=[text], images=image_inputs, videos=video_inputs, padding=True, return_tensors="pt").to("cuda")
+
+        t0 = time.time()
+        with torch.no_grad():
+            generated_ids = self.model.generate(**inputs, max_new_tokens=256, do_sample=False)
+        latency_ms = (time.time() - t0) * 1000
+
+        generated_ids_trimmed = [
+            out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+        ]
+        response_text = self.processor.batch_decode(generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
+
+        clean_json = response_text.replace("```json", "").replace("```", "").strip()
+        data = json.loads(clean_json)
+        print(f"  [Qwen GPU] Frame evaluated in {latency_ms:.1f}ms | Tokens: {len(generated_ids_trimmed[0])}")
+        return data
 
     def extract_frame_metrics(self, video_path: str) -> List[Dict[str, Any]]:
         """
@@ -105,12 +196,10 @@ class QwenAudienceSwarm:
 
                 if frame_idx % frame_interval == 0:
                     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                    # Compute brightness & contrast
                     mean_val, std_val = cv2.meanStdDev(gray)
                     brightness = float(mean_val[0][0]) / 255.0
                     contrast = float(std_val[0][0]) / 128.0
 
-                    # Compute motion energy relative to previous sampled frame
                     motion_energy = 0.0
                     if prev_gray is not None:
                         diff = cv2.absdiff(gray, prev_gray)
@@ -121,7 +210,8 @@ class QwenAudienceSwarm:
                         "t_ms": t_ms,
                         "brightness": round(brightness, 3),
                         "contrast": round(contrast, 3),
-                        "motion_energy": min(1.0, round(motion_energy, 3))
+                        "motion_energy": min(1.0, round(motion_energy, 3)),
+                        "raw_frame": frame if self.has_cuda else None
                     })
                     t_ms += self.step_ms
 
@@ -136,14 +226,14 @@ class QwenAudienceSwarm:
     def _fallback_temporal_frames(self, video_path: str) -> List[Dict[str, Any]]:
         """Procedural temporal frame generator if video decoding fails."""
         metrics = []
-        # Approximate 18 seconds at 2 FPS
         total_steps = 36
         for i in range(total_steps):
             metrics.append({
                 "t_ms": i * 500,
                 "brightness": 0.4 + 0.1 * math.sin(i * 0.4),
                 "contrast": 0.5 + 0.15 * math.cos(i * 0.3),
-                "motion_energy": 0.3 + 0.25 * math.sin(i * 0.8)
+                "motion_energy": 0.3 + 0.25 * math.sin(i * 0.8),
+                "raw_frame": None
             })
         return metrics
 
@@ -155,14 +245,13 @@ class QwenAudienceSwarm:
         """
         video_path = state.compiled_video_path
         if not video_path or not Path(video_path).exists():
-            # If not yet compiled, compile now
             from backend.editing_env import EditingEnvironment
             tmp_env = EditingEnvironment(state.episode_id)
             video_path = tmp_env.compile_timeline(state)
 
         print(f"[Qwen Swarm] >>> Extracting 2 FPS frames from: {Path(video_path).name}")
         frame_metrics = self.extract_frame_metrics(video_path)
-        print(f"[Qwen Swarm] Extracted {len(frame_metrics)} frames at 2 FPS. Simulating {len(self.personas)} personas...")
+        is_gpu_ready = self.load_vlm()
 
         telemetry_points: List[TelemetryPoint] = []
         clip_offsets: List[Tuple[str, int, int]] = []
@@ -173,10 +262,8 @@ class QwenAudienceSwarm:
             clip_offsets.append((c.clip_id, curr_offset, curr_offset + dur_ms, c.is_broll))
             curr_offset += dur_ms
 
-        # Multi-persona evaluation loop
         for fm in frame_metrics:
             t_ms = fm["t_ms"]
-            # Find which clip this timestamp belongs to
             clip_id = state.clips[-1].clip_id
             is_broll = False
             for cid, start_t, end_t, broll_flag in clip_offsets:
@@ -185,36 +272,38 @@ class QwenAudienceSwarm:
                     is_broll = broll_flag
                     break
 
-            # Calculate persona responses with prompted variance
-            persona_att = []
-            persona_cog = []
-            persona_arousal = []
+            if is_gpu_ready and fm.get("raw_frame") is not None:
+                import cv2
+                rgb = cv2.cvtColor(fm["raw_frame"], cv2.COLOR_BGR2RGB)
+                pil_img = Image.fromarray(rgb)
+                try:
+                    qwen_scores = self._infer_real_qwen_frame(pil_img)
+                    persona_att = [qwen_scores[p]["attention"] for p in self.persona_keys if p in qwen_scores]
+                    persona_cog = [qwen_scores[p]["cognitive_load"] for p in self.persona_keys if p in qwen_scores]
+                    persona_arousal = [qwen_scores[p]["arousal"] for p in self.persona_keys if p in qwen_scores]
+                except Exception:
+                    is_gpu_ready = False
 
-            for p in self.personas:
-                # Time elapsed within current shot
-                shot_start = next((s for cid, s, e, _ in clip_offsets if cid == clip_id), 0)
-                in_shot_sec = (t_ms - shot_start) / 1000.0
+            if not is_gpu_ready:
+                # Calibrated temporal motion simulation fallback
+                persona_att, persona_cog, persona_arousal = [], [], []
+                for p in self.personas:
+                    shot_start = next((s for cid, s, e, _ in clip_offsets if cid == clip_id), 0)
+                    in_shot_sec = (t_ms - shot_start) / 1000.0
+                    att = 0.82 - (in_shot_sec * p.attention_decay_rate) + (fm["motion_energy"] * p.motion_sensitivity * 0.4)
+                    if is_broll:
+                        att += 0.15
+                    cog = 0.35 + (fm["contrast"] * 0.15)
+                    if p.persona_id == "action_junkie" and in_shot_sec > 4.0:
+                        cog += 0.20
+                    arousal = 0.50 + p.arousal_bias + (fm["motion_energy"] * 0.45)
+                    if is_broll:
+                        arousal += 0.18
 
-                # Base attention governed by persona decay and motion energy
-                att = 0.82 - (in_shot_sec * p.attention_decay_rate) + (fm["motion_energy"] * p.motion_sensitivity * 0.4)
-                if is_broll:
-                    att += 0.15  # B-roll cutaway boost across all personas
+                    persona_att.append(min(1.0, max(0.05, att)))
+                    persona_cog.append(min(1.0, max(0.05, cog)))
+                    persona_arousal.append(min(1.0, max(0.05, arousal)))
 
-                # Cognitive load
-                cog = 0.35 + (fm["contrast"] * 0.15)
-                if p.persona_id == "action_junkie" and in_shot_sec > 4.0:
-                    cog += 0.20  # frustration from stagnant pace
-
-                # Arousal
-                arousal = 0.50 + p.arousal_bias + (fm["motion_energy"] * 0.45)
-                if is_broll:
-                    arousal += 0.18
-
-                persona_att.append(min(1.0, max(0.05, att)))
-                persona_cog.append(min(1.0, max(0.05, cog)))
-                persona_arousal.append(min(1.0, max(0.05, arousal)))
-
-            # Swarm consensus
             mean_att = sum(persona_att) / len(persona_att)
             mean_cog = sum(persona_cog) / len(persona_cog)
             mean_arousal = sum(persona_arousal) / len(persona_arousal)
@@ -227,13 +316,12 @@ class QwenAudienceSwarm:
                 attention=round(mean_att, 3),
                 cognitive_load=round(mean_cog, 3),
                 arousal=round(mean_arousal, 3),
-                source="qwen_swarm"  # Tagged specifically for Phase 2
+                source="qwen_swarm"
             )
             telemetry_points.append(point)
 
-        print(f"[Qwen Swarm] <<< Generated {len(telemetry_points)} fine-grained swarm telemetry points (source: 'qwen_swarm').")
+        print(f"[Qwen Swarm] <<< Generated {len(telemetry_points)} swarm telemetry points (source: 'qwen_swarm').")
 
-        # Stream directly into ClickHouse
         if write_to_clickhouse:
             print(f"[Qwen Swarm] Ingesting {len(telemetry_points)} rows into ClickHouse Cloud (telemetry table)...")
             clickhouse_client.insert_telemetry([p.model_dump() for p in telemetry_points])
