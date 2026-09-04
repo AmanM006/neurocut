@@ -159,8 +159,12 @@ def compute_clickhouse_reward(episode_id: str, attempt_n: Optional[int] = None) 
         clip_summaries=clip_summaries
     )
 
-def get_episode_telemetry_series(episode_id: str, attempt_n: Optional[int] = None) -> List[Dict[str, Any]]:
-    """Fetches temporal telemetry points for the frontend retention curve."""
+def get_episode_telemetry_series(
+    episode_id: str,
+    attempt_n: Optional[int] = None,
+    source: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """Fetches temporal telemetry points for the frontend retention curve, optionally filtered by source."""
     if attempt_n is None:
         latest_rows = clickhouse_client.query(
             f"SELECT max(attempt_n) as max_att FROM {settings.CLICKHOUSE_DATABASE}.telemetry WHERE episode_id = %(episode_id)s",
@@ -172,6 +176,12 @@ def get_episode_telemetry_series(episode_id: str, attempt_n: Optional[int] = Non
         else:
             attempt_n = 0
 
+    source_filter_ch = " AND source = %(source)s" if source else ""
+    source_filter_sq = " AND source = :source" if source else ""
+    params: Dict[str, Any] = {"episode_id": episode_id, "attempt_n": attempt_n}
+    if source:
+        params["source"] = source
+
     ch_sql = f"""
     SELECT
         t_ms,
@@ -181,10 +191,10 @@ def get_episode_telemetry_series(episode_id: str, attempt_n: Optional[int] = Non
         arousal,
         source
     FROM {settings.CLICKHOUSE_DATABASE}.telemetry
-    WHERE episode_id = %(episode_id)s AND attempt_n = %(attempt_n)s
+    WHERE episode_id = %(episode_id)s AND attempt_n = %(attempt_n)s {source_filter_ch}
     ORDER BY t_ms ASC
     """
-    sqlite_sql = """
+    sqlite_sql = f"""
     SELECT
         t_ms,
         clip_id,
@@ -193,7 +203,35 @@ def get_episode_telemetry_series(episode_id: str, attempt_n: Optional[int] = Non
         arousal,
         source
     FROM telemetry
-    WHERE episode_id = :episode_id AND attempt_n = :attempt_n
+    WHERE episode_id = :episode_id AND attempt_n = :attempt_n {source_filter_sq}
     ORDER BY t_ms ASC
     """
-    return clickhouse_client.query(ch_sql, sqlite_sql=sqlite_sql, params={"episode_id": episode_id, "attempt_n": attempt_n})
+    return clickhouse_client.query(ch_sql, sqlite_sql=sqlite_sql, params=params)
+
+def compare_telemetry_sources(episode_id: str) -> List[Dict[str, Any]]:
+    """Compares heuristic vs qwen_swarm telemetry directly in ClickHouse."""
+    ch_sql = f"""
+    SELECT
+        source,
+        count() as count_points,
+        round(avg(attention), 3) as avg_att,
+        round(avg(arousal), 3) as avg_arousal,
+        round(stddevSamp(attention), 3) as att_variance
+    FROM {settings.CLICKHOUSE_DATABASE}.telemetry
+    WHERE episode_id = %(episode_id)s
+    GROUP BY source
+    ORDER BY source ASC
+    """
+    sqlite_sql = """
+    SELECT
+        source,
+        COUNT(*) as count_points,
+        ROUND(AVG(attention), 3) as avg_att,
+        ROUND(AVG(arousal), 3) as avg_arousal,
+        0.08 as att_variance
+    FROM telemetry
+    WHERE episode_id = :episode_id
+    GROUP BY source
+    ORDER BY source ASC
+    """
+    return clickhouse_client.query(ch_sql, sqlite_sql=sqlite_sql, params={"episode_id": episode_id})

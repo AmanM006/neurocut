@@ -1,13 +1,14 @@
 "use client";
 
 import React from "react";
-import { Play, SkipForward, Sparkles, RefreshCw, Layers, ShieldCheck } from "lucide-react";
+import { Play, SkipForward, Sparkles, RefreshCw, Layers, ShieldCheck, Users } from "lucide-react";
 
 interface ControlsProps {
   isRunning: boolean;
   onRunOptimization: () => void;
   onStepOptimization: () => void;
   onForceIntervention: () => void;
+  onRunSwarm: () => void;
   onResetEpisode: () => void;
   episodeId: string;
   clickhouseMode: string;
@@ -18,6 +19,7 @@ export const Controls: React.FC<ControlsProps> = ({
   onRunOptimization,
   onStepOptimization,
   onForceIntervention,
+  onRunSwarm,
   onResetEpisode,
   episodeId,
   clickhouseMode
@@ -37,12 +39,12 @@ export const Controls: React.FC<ControlsProps> = ({
               <h1 className="text-base font-bold tracking-tight text-white">
                 NEURO-CUT
               </h1>
-              <span className="px-2 py-0.5 text-[10px] font-mono font-bold tracking-wider rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                PHASE 1 // CORE ENGINE
+              <span className="px-2 py-0.5 text-[10px] font-mono font-bold tracking-wider rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
+                PHASE 1 + 2 ACTIVE
               </span>
             </div>
             <p className="text-[11px] text-slate-400 font-mono">
-              Agentic Cinema Hackathon • ClickHouse Reward Oracle + ADK Showrunner
+              Agentic Cinema Hackathon • ClickHouse Reward Oracle + Qwen Swarm + ADK Showrunner
             </p>
           </div>
         </div>
@@ -82,13 +84,23 @@ export const Controls: React.FC<ControlsProps> = ({
           </button>
 
           <button
+            onClick={onRunSwarm}
+            disabled={isRunning}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-purple-950/60 hover:bg-purple-900/80 text-purple-300 border border-purple-700/50 transition-all active:scale-95 disabled:opacity-50"
+            title="Run Phase 2 Qwen 2.5-VL 4-Persona Audience Swarm at 2 FPS"
+          >
+            <Users className="w-3.5 h-3.5 text-purple-400" />
+            <span>Qwen Swarm (2 FPS)</span>
+          </button>
+
+          <button
             onClick={onForceIntervention}
             disabled={isRunning}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-black shadow-md shadow-amber-900/30 transition-all active:scale-95 disabled:opacity-50"
             title="Manually trigger Google ADK Showrunner Veo B-Roll generation"
           >
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Force Showrunner Intervention</span>
+            <span>Force Showrunner</span>
           </button>
 
           <button

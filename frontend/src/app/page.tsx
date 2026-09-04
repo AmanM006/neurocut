@@ -19,6 +19,8 @@ export default function Home() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [clickhouseMode, setClickhouseMode] = useState<string>("embedded_analytics");
+  const [selectedSource, setSelectedSource] = useState<string>("all");
+  const [comparisonData, setComparisonData] = useState<any[]>([]);
 
   const addLog = useCallback((type: LogEntry["type"], title: string, details?: string, r?: number) => {
     const newEntry: LogEntry = {
@@ -33,9 +35,14 @@ export default function Home() {
   }, []);
 
   // Fetch telemetry from ClickHouse
-  const refreshTelemetry = useCallback(async (epId: string) => {
+  const refreshTelemetry = useCallback(async (epId: string, sourceFilter?: string) => {
     try {
-      const res = await fetch(`/api/episodes/${epId}/telemetry`);
+      const src = sourceFilter !== undefined ? sourceFilter : selectedSource;
+      const url = src && src !== "all" 
+        ? `/api/episodes/${epId}/telemetry?source=${src}`
+        : `/api/episodes/${epId}/telemetry`;
+      
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         setSeries(data.series || []);
@@ -46,10 +53,17 @@ export default function Home() {
           setWorstClipId(data.metrics.worst_clip_id);
         }
       }
+
+      // Fetch comparison across heuristic vs qwen_swarm
+      const compRes = await fetch(`/api/episodes/${epId}/telemetry/compare`);
+      if (compRes.ok) {
+        const compJson = await compRes.json();
+        setComparisonData(compJson.comparison || []);
+      }
     } catch (e) {
       console.error("Failed to fetch telemetry:", e);
     }
-  }, []);
+  }, [selectedSource]);
 
   // Initialize episode
   const initEpisode = useCallback(async () => {
@@ -215,12 +229,42 @@ export default function Home() {
     }
   };
 
+  // Phase 2: Run Qwen 2.5-VL Audience Swarm (2 FPS)
+  const handleRunSwarm = async () => {
+    if (isRunning) return;
+    try {
+      addLog("action", "Running Qwen 2.5-VL Audience Swarm", "Evaluating 2 FPS frames across 4 personas (Action, Drama, Sensory, Casual)...");
+      const res = await fetch(`/api/episodes/${episodeId}/swarm/evaluate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        addLog(
+          "query",
+          "Qwen Swarm Telemetry Stream Ingested",
+          `Generated ${data.points_count} points at 2 FPS into ClickHouse Cloud (source: 'qwen_swarm'). Consensus Att: ${(data.consensus_attention * 100).toFixed(1)}%`
+        );
+        setSelectedSource("qwen_swarm");
+        await refreshTelemetry(episodeId, "qwen_swarm");
+      }
+    } catch (e) {
+      console.error("Swarm evaluation failed:", e);
+    }
+  };
+
+  const handleSelectSource = (src: string) => {
+    setSelectedSource(src);
+    refreshTelemetry(episodeId, src);
+  };
+
   return (
     <main className="min-h-screen bg-[#080C10] flex flex-col text-slate-100">
       <Controls
         isRunning={isRunning}
         onRunOptimization={handleRunOptimization}
         onStepOptimization={handleStepOptimization}
+        onRunSwarm={handleRunSwarm}
         onForceIntervention={handleForceIntervention}
         onResetEpisode={initEpisode}
         episodeId={episodeId}
@@ -248,6 +292,9 @@ export default function Home() {
               worstDrop={worstDrop}
               worstClipId={worstClipId}
               clickhouseMode={clickhouseMode}
+              selectedSource={selectedSource}
+              onSelectSource={handleSelectSource}
+              comparisonData={comparisonData}
             />
           </div>
         </div>

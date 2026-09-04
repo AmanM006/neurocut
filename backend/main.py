@@ -147,15 +147,58 @@ async def stream_optimization(episode_id: str, max_steps: int = Query(default=4,
     )
 
 @app.get("/api/episodes/{episode_id}/telemetry")
-def get_telemetry(episode_id: str, attempt_n: Optional[int] = None):
-    series = get_episode_telemetry_series(episode_id, attempt_n=attempt_n)
+def get_telemetry(
+    episode_id: str,
+    attempt_n: Optional[int] = None,
+    source: Optional[str] = Query(default=None)
+):
+    series = get_episode_telemetry_series(episode_id, attempt_n=attempt_n, source=source)
     metrics = compute_clickhouse_reward(episode_id, attempt_n=attempt_n)
     return {
         "episode_id": episode_id,
         "attempt_n": attempt_n,
+        "source": source or "all",
         "points_count": len(series),
         "metrics": metrics.model_dump(),
         "series": series
+    }
+
+@app.post("/api/episodes/{episode_id}/swarm/evaluate")
+def evaluate_with_qwen_swarm(episode_id: str):
+    """
+    Phase 2 Endpoint: Evaluates compiled video cut with Qwen 2.5-VL synthetic audience swarm at 2 FPS.
+    Ingests fine-grained multi-persona telemetry tagged source: 'qwen_swarm' into ClickHouse Cloud.
+    """
+    from backend.scoring.qwen_swarm import QwenAudienceSwarm
+    env = active_environments.get(episode_id)
+    if not env:
+        env = EditingEnvironment(episode_id=episode_id)
+        active_environments[episode_id] = env
+        active_optimizers[episode_id] = BeamSearchOptimizer(env)
+
+    swarm = QwenAudienceSwarm()
+    points = swarm.score_timeline(env.state, write_to_clickhouse=True)
+    comparison = swarm.get_comparison_metrics(episode_id)
+
+    return {
+        "episode_id": episode_id,
+        "status": "evaluated",
+        "source": "qwen_swarm",
+        "sampling_fps": 2.0,
+        "points_generated": len(points),
+        "personas_simulated": len(swarm.personas),
+        "comparison": comparison["comparison"]
+    }
+
+@app.get("/api/episodes/{episode_id}/telemetry/compare")
+def get_telemetry_comparison(episode_id: str):
+    """
+    Phase 2 Endpoint: Returns comparison of Heuristic vs Qwen Swarm telemetry in ClickHouse.
+    """
+    from backend.clickhouse.reward_queries import compare_telemetry_sources
+    return {
+        "episode_id": episode_id,
+        "comparison": compare_telemetry_sources(episode_id)
     }
 
 @app.get("/api/episodes/{episode_id}/decisions")

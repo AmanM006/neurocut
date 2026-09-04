@@ -22,6 +22,14 @@ interface TelemetryPoint {
   source: string;
 }
 
+interface ComparisonItem {
+  source: string;
+  count_points: number;
+  avg_att: number;
+  avg_arousal: number;
+  att_variance?: number;
+}
+
 interface TelemetryChartProps {
   series: TelemetryPoint[];
   reward: number;
@@ -29,6 +37,9 @@ interface TelemetryChartProps {
   worstDrop: number;
   worstClipId: string | null;
   clickhouseMode: string;
+  selectedSource?: string;
+  onSelectSource?: (source: string) => void;
+  comparisonData?: ComparisonItem[];
 }
 
 export const TelemetryChart: React.FC<TelemetryChartProps> = ({
@@ -37,7 +48,10 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
   meanAttention,
   worstDrop,
   worstClipId,
-  clickhouseMode
+  clickhouseMode,
+  selectedSource = "all",
+  onSelectSource,
+  comparisonData = []
 }) => {
   // Format series for chart
   const formattedData = series.map((p) => ({
@@ -46,7 +60,8 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
     Attention: p.attention,
     Arousal: p.arousal,
     CognitiveLoad: p.cognitive_load,
-    clip: p.clip_id
+    clip: p.clip_id,
+    source: p.source
   }));
 
   return (
@@ -66,12 +81,72 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Source Filter Tabs */}
+          {onSelectSource && (
+            <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-[11px] font-mono">
+              <button
+                onClick={() => onSelectSource("all")}
+                className={`px-2 py-0.5 rounded transition-all ${
+                  selectedSource === "all"
+                    ? "bg-slate-700 text-white font-semibold"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => onSelectSource("heuristic")}
+                className={`px-2 py-0.5 rounded transition-all ${
+                  selectedSource === "heuristic"
+                    ? "bg-cyan-900/60 text-cyan-300 font-semibold border border-cyan-700/50"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                Heuristic
+              </button>
+              <button
+                onClick={() => onSelectSource("qwen_swarm")}
+                className={`px-2 py-0.5 rounded transition-all ${
+                  selectedSource === "qwen_swarm"
+                    ? "bg-purple-900/60 text-purple-300 font-semibold border border-purple-700/50"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                Qwen Swarm
+              </button>
+            </div>
+          )}
+
           <span className="flex items-center gap-1 px-2 py-0.5 text-[11px] font-mono rounded bg-slate-800 text-slate-300 border border-slate-700">
             <Database className="w-3 h-3 text-cyan-400" />
             <span>{clickhouseMode === "cloud" ? "ClickHouse Cloud (MCP)" : "Embedded SQL Oracle"}</span>
           </span>
         </div>
       </div>
+
+      {/* Side-by-Side Comparison Banner if Swarm data exists */}
+      {comparisonData.length > 1 && (
+        <div className="mb-3 px-3 py-1.5 rounded-lg bg-slate-900/80 border border-purple-500/20 flex items-center justify-between text-xs font-mono">
+          <span className="text-purple-400 font-semibold flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
+            ClickHouse Side-by-Side Telemetry Consensus:
+          </span>
+          <div className="flex items-center gap-4 text-slate-300">
+            {comparisonData.map((item) => (
+              <span key={item.source} className="flex items-center gap-1">
+                <span className={item.source === "qwen_swarm" ? "text-purple-400" : "text-cyan-400"}>
+                  {item.source}:
+                </span>
+                <span>{item.count_points} pts</span>
+                <span className="text-slate-500">|</span>
+                <span>Att: {(item.avg_att * 100).toFixed(1)}%</span>
+                <span className="text-slate-500">|</span>
+                <span>Arousal: {(item.avg_arousal * 100).toFixed(1)}%</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Metric Cards Row */}
       <div className="grid grid-cols-4 gap-2 mb-3">
