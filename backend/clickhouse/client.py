@@ -99,6 +99,21 @@ class ClickHouseClient:
         """)
         self.sqlite_conn.commit()
 
+    def _execute_with_retry(self, fn, *args, **kwargs):
+        """Retries a ClickHouse Cloud call up to 3 times on transient network/DNS drops."""
+        retries = 3
+        last_err = None
+        for attempt in range(1, retries + 1):
+            try:
+                return fn(*args, **kwargs)
+            except Exception as e:
+                last_err = e
+                if attempt < retries:
+                    import time
+                    time.sleep(1.0 * attempt)
+                else:
+                    raise last_err
+
     def insert_telemetry(self, records: List[Dict[str, Any]]):
         if not records:
             return
@@ -118,7 +133,8 @@ class ClickHouseClient:
                 ]
                 for r in records
             ]
-            self.ch_client.insert(
+            self._execute_with_retry(
+                self.ch_client.insert,
                 f"{settings.CLICKHOUSE_DATABASE}.telemetry",
                 data,
                 column_names=["episode_id", "attempt_n", "clip_id", "t_ms", "attention", "cognitive_load", "arousal", "source"]
@@ -135,7 +151,8 @@ class ClickHouseClient:
                             target_clip_id: str, reward: float, verdict: str, reasoning: str):
         if self.is_cloud and self.ch_client:
             data = [[episode_id, attempt_n, action, target_clip_id, float(reward), verdict, reasoning]]
-            self.ch_client.insert(
+            self._execute_with_retry(
+                self.ch_client.insert,
                 f"{settings.CLICKHOUSE_DATABASE}.edit_attempts",
                 data,
                 column_names=["episode_id", "attempt_n", "action", "target_clip_id", "reward", "verdict", "reasoning"]
@@ -151,7 +168,8 @@ class ClickHouseClient:
     def insert_showrunner_decision(self, episode_id: str, decision_type: str, target_scene: str, reasoning: str):
         if self.is_cloud and self.ch_client:
             data = [[episode_id, decision_type, target_scene, reasoning]]
-            self.ch_client.insert(
+            self._execute_with_retry(
+                self.ch_client.insert,
                 f"{settings.CLICKHOUSE_DATABASE}.showrunner_decisions",
                 data,
                 column_names=["episode_id", "decision_type", "target_scene", "reasoning"]
@@ -168,7 +186,7 @@ class ClickHouseClient:
         params = params or {}
         if self.is_cloud and self.ch_client:
             print(f"[ClickHouse MCP] >>> Executing query on ClickHouse Cloud via mcp-clickhouse bridge...")
-            result = self.ch_client.query(ch_sql, parameters=params)
+            result = self._execute_with_retry(self.ch_client.query, ch_sql, parameters=params)
             columns = result.column_names
             return [dict(zip(columns, row)) for row in result.result_rows]
         else:

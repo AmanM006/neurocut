@@ -3,7 +3,8 @@
 > **Autonomous Video Editing with Reinforcement Learning Timeline Optimization, ClickHouse Reward Oracle, and Google ADK Showrunner Intervention**
 > *Built for the Google Cloud Agentic Cinema Hackathon (ClickHouse Partner Track)*
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AmanM006/neurocut/blob/main/notebooks/qwen_swarm_colab.ipynb)
+[![Colab: Qwen Swarm](https://img.shields.io/badge/Colab-Qwen%20Swarm%20VLM-orange?logo=googlecolab)](https://colab.research.google.com/github/AmanM006/neurocut/blob/main/notebooks/qwen_swarm_colab.ipynb)
+[![Colab: PPO RL Training](https://img.shields.io/badge/Colab-PPO%20RL%20Training-blue?logo=googlecolab)](https://colab.research.google.com/github/AmanM006/neurocut/blob/main/notebooks/train_ppo_colab.ipynb)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![ClickHouse Cloud](https://img.shields.io/badge/ClickHouse-Cloud-orange.svg)](https://clickhouse.com/cloud)
 [![Google ADK](https://img.shields.io/badge/Google-ADK%20%26%20Gemini-blue.svg)](https://ai.google.dev/)

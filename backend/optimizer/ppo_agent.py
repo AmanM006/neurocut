@@ -80,6 +80,37 @@ def decode_action(action_idx: int, clips: List[Clip]) -> ActionSpec:
         value=val
     )
 
+def get_action_mask(clips: List[Clip], shot_pool: Dict[str, Any], min_frames: int = 24) -> np.ndarray:
+    """Computes a boolean validity mask across 40 discrete actions for the current timeline state."""
+    mask = np.zeros(TOTAL_ACTIONS, dtype=bool)
+    n_clips = len(clips)
+    for act_idx in range(TOTAL_ACTIONS):
+        slot = act_idx % MAX_CLIPS
+        act_type_idx = act_idx // MAX_CLIPS
+        act_type = ACTION_TYPES[act_type_idx]
+        if slot >= n_clips:
+            continue
+        clip = clips[slot]
+        if act_type == "trim_head":
+            if (clip.end_frame - (clip.start_frame + 12)) >= min_frames:
+                mask[act_idx] = True
+        elif act_type == "trim_tail":
+            if ((clip.end_frame - 12) - clip.start_frame) >= min_frames:
+                mask[act_idx] = True
+        elif act_type == "swap_take":
+            alt_id = "shot_02_dialogue_take2" if clip.clip_id == "shot_02_dialogue_take1" else "shot_02_dialogue_take1"
+            if alt_id in shot_pool and alt_id != clip.clip_id:
+                mask[act_idx] = True
+        elif act_type == "ripple_delete":
+            if n_clips > 2:
+                mask[act_idx] = True
+        elif act_type == "insert_broll":
+            if n_clips < MAX_CLIPS:
+                mask[act_idx] = True
+    if not np.any(mask):
+        mask[0] = True
+    return mask
+
 class TimelineStateEncoder:
     """
     Encodes physical TimelineState and ClickHouse audience telemetry into a normalized 64-dim vector.
@@ -169,8 +200,11 @@ if HAS_TORCH:
             value = self.critic(feats)
             return logits, value
 
-        def get_action_and_value(self, state_tensor: torch.Tensor, action: Optional[torch.Tensor] = None, deterministic: bool = False):
+        def get_action_and_value(self, state_tensor: torch.Tensor, action: Optional[torch.Tensor] = None, mask: Optional[np.ndarray] = None, deterministic: bool = False):
             logits, value = self.forward(state_tensor)
+            if mask is not None:
+                mask_t = torch.tensor(mask, dtype=torch.bool, device=logits.device)
+                logits = torch.where(mask_t, logits, torch.tensor(-1e9, device=logits.device))
             dist = Categorical(logits=logits)
             if action is None:
                 if deterministic:
@@ -205,15 +239,24 @@ class VectorizedActorCritic:
         values = np.dot(hidden, self.W_critic) + self.b_critic
         return hidden, logits, values
 
-    def sample_action(self, state: np.ndarray, temperature: float = 1.0, deterministic: bool = False) -> Tuple[int, float, float]:
+    def sample_action(self, state: np.ndarray, mask: Optional[np.ndarray] = None, temperature: float = 1.0, deterministic: bool = False) -> Tuple[int, float, float]:
         hidden, logits, values = self.forward(state)
         val = float(values.flatten()[0])
+        if mask is not None:
+            logits = np.where(mask, logits, -1e9)
         if deterministic:
             action_idx = int(np.argmax(logits))
             return action_idx, 0.0, val
         # Softmax with temperature
         exp_logits = np.exp((logits - np.max(logits)) / max(1e-3, temperature))
-        probs = exp_logits / np.sum(exp_logits)
+        if mask is not None:
+            exp_logits = np.where(mask, exp_logits, 0.0)
+        sum_exp = np.sum(exp_logits)
+        if sum_exp <= 0:
+            valid_indices = np.where(mask)[0] if mask is not None else np.arange(len(logits))
+            action_idx = int(np.random.choice(valid_indices))
+            return action_idx, float(-np.log(len(valid_indices))), val
+        probs = exp_logits / sum_exp
         action_idx = int(np.random.choice(len(probs), p=probs))
         log_prob = float(np.log(max(1e-8, probs[action_idx])))
         return action_idx, log_prob, val
@@ -287,16 +330,17 @@ class PPOAgent:
     def select_action(self, state: TimelineState, reward_metrics: Optional[RewardMetrics] = None, deterministic: bool = False) -> Tuple[ActionSpec, float, float]:
         """Encodes state and selects discrete editing action via policy."""
         state_vec = self.encoder.encode(state, reward_metrics)
+        mask = get_action_mask(state.clips, self.env.shot_pool, self.env.MIN_CLIP_FRAMES)
         
         if self.has_torch:
             with torch.no_grad():
                 st = torch.from_numpy(state_vec).unsqueeze(0).to(self.device)
-                act_tensor, logp_tensor, _, val_tensor = self.model.get_action_and_value(st, deterministic=deterministic)
+                act_tensor, logp_tensor, _, val_tensor = self.model.get_action_and_value(st, mask=mask, deterministic=deterministic)
                 act_idx = int(act_tensor.item())
                 logp = float(logp_tensor.item())
                 val = float(val_tensor.item())
         else:
-            act_idx, logp, val = self.model.sample_action(state_vec, deterministic=deterministic)
+            act_idx, logp, val = self.model.sample_action(state_vec, mask=mask, deterministic=deterministic)
 
         action_spec = decode_action(act_idx, state.clips)
         return action_spec, logp, val
@@ -382,10 +426,12 @@ class PPOAgent:
                 step_reward += 0.30
                 if verdict != "showrunner_intervened":
                     verdict = "improved"
-                self.env.state = new_state
             else:
                 step_reward -= 0.20
                 verdict = "regressed"
+
+            # Always transition environment state to the applied edit
+            self.env.state = new_state
 
             # Check if worst bottleneck was resolved
             if new_metrics.worst_clip_id != prev_metrics.worst_clip_id and new_reward >= prev_reward:
