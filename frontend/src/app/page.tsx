@@ -21,6 +21,7 @@ export default function Home() {
   const [clickhouseMode, setClickhouseMode] = useState<string>("embedded_analytics");
   const [selectedSource, setSelectedSource] = useState<string>("all");
   const [comparisonData, setComparisonData] = useState<any[]>([]);
+  const [optimizerMode, setOptimizerMode] = useState<"beam_search" | "ppo">("beam_search");
 
   const addLog = useCallback((type: LogEntry["type"], title: string, details?: string, r?: number) => {
     const newEntry: LogEntry = {
@@ -113,9 +114,19 @@ export default function Home() {
   const handleRunOptimization = () => {
     if (isRunning) return;
     setIsRunning(true);
-    addLog("action", "Starting Autonomous Beam Search Loop", "Supervised by Google ADK Showrunner Agent...");
+    addLog(
+      "action",
+      optimizerMode === "ppo"
+        ? "Starting Autonomous PPO Policy RL Loop"
+        : "Starting Autonomous Beam Search Loop",
+      optimizerMode === "ppo"
+        ? "Guided by 40-action Actor-Critic policy using ClickHouse retention delta as reward oracle..."
+        : "Supervised by Google ADK Showrunner Agent..."
+    );
 
-    const eventSource = new EventSource(`/api/episodes/${episodeId}/optimize/stream?max_steps=4`);
+    const eventSource = new EventSource(
+      `/api/episodes/${episodeId}/optimize/stream?max_steps=4&optimizer_type=${optimizerMode}`
+    );
 
     eventSource.onmessage = (e) => {
       try {
@@ -141,11 +152,21 @@ export default function Home() {
           } else {
             addLog(
               "action",
-              `Attempt #${stepData.attempt_n}: ${stepData.action_taken}`,
+              optimizerMode === "ppo"
+                ? `PPO Action #${stepData.attempt_n}: ${stepData.action_taken}`
+                : `Attempt #${stepData.attempt_n}: ${stepData.action_taken}`,
               `Verdict: ${stepData.verdict.toUpperCase()} | Reward: ${stepData.reward.toFixed(4)}`
             );
           }
           refreshTelemetry(episodeId);
+        } else if (payload.event === "trained") {
+          if (payload.metrics) {
+            addLog(
+              "query",
+              "PPO Policy Gradient Updated",
+              `Actor Loss: ${Number(payload.metrics.policy_loss || 0).toFixed(4)} | Critic Loss: ${Number(payload.metrics.critic_loss || 0).toFixed(4)}`
+            );
+          }
         } else if (payload.event === "completed") {
           addLog("success", "Optimization Converged", `Final Cut compiled with reward ${(reward || 0).toFixed(4)}.`);
           setIsRunning(false);
@@ -166,7 +187,11 @@ export default function Home() {
   const handleStepOptimization = async () => {
     if (isRunning) return;
     try {
-      const res = await fetch(`/api/episodes/${episodeId}/optimize/step`, { method: "POST" });
+      const endpoint =
+        optimizerMode === "ppo"
+          ? `/api/episodes/${episodeId}/optimize/ppo-step`
+          : `/api/episodes/${episodeId}/optimize/step`;
+      const res = await fetch(endpoint, { method: "POST" });
       if (res.ok) {
         const stepData = await res.json();
         setAttemptN(stepData.attempt_n);
@@ -188,7 +213,9 @@ export default function Home() {
         } else {
           addLog(
             "action",
-            `Step #${stepData.attempt_n}: ${stepData.action_taken}`,
+            optimizerMode === "ppo"
+              ? `PPO Action #${stepData.attempt_n}: ${stepData.action_taken}`
+              : `Step #${stepData.attempt_n}: ${stepData.action_taken}`,
             `Verdict: ${stepData.verdict.toUpperCase()} | Reward: ${stepData.reward.toFixed(4)}`
           );
         }
@@ -269,6 +296,8 @@ export default function Home() {
         onResetEpisode={initEpisode}
         episodeId={episodeId}
         clickhouseMode={clickhouseMode}
+        optimizerMode={optimizerMode}
+        onToggleOptimizer={setOptimizerMode}
       />
 
       <div className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-5">

@@ -63,6 +63,13 @@ class Settings(BaseSettings):
     OPTIMIZER_MODE: str = os.getenv("OPTIMIZER_MODE", "beam_search")  # "beam_search" (Phase 1) | "ppo" (Phase 3)
     SHOWRUNNER_STUCK_THRESHOLD: int = 2  # Attempts with drop-off before Showrunner B-roll intervention
 
+    # Phase 3 PPO Reinforcement Learning Hyperparameters
+    PPO_CLIP_EPS: float = 0.2
+    PPO_GAMMA: float = 0.99
+    PPO_GAE_LAMBDA: float = 0.95
+    PPO_ENTROPY_COEFF: float = 0.01
+    PPO_LR: float = 3e-4
+
     class Config:
         env_file = PROJECT_DIR / ".env"
         extra = "ignore"

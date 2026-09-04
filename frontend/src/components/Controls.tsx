@@ -12,6 +12,8 @@ interface ControlsProps {
   onResetEpisode: () => void;
   episodeId: string;
   clickhouseMode: string;
+  optimizerMode?: "beam_search" | "ppo";
+  onToggleOptimizer?: (mode: "beam_search" | "ppo") => void;
 }
 
 export const Controls: React.FC<ControlsProps> = ({
@@ -22,7 +24,9 @@ export const Controls: React.FC<ControlsProps> = ({
   onRunSwarm,
   onResetEpisode,
   episodeId,
-  clickhouseMode
+  clickhouseMode,
+  optimizerMode = "beam_search",
+  onToggleOptimizer
 }) => {
   return (
     <header className="bg-[#101620]/90 backdrop-blur border-b border-slate-800 px-6 py-3 sticky top-0 z-50">
@@ -39,18 +43,45 @@ export const Controls: React.FC<ControlsProps> = ({
               <h1 className="text-base font-bold tracking-tight text-white">
                 NEURO-CUT
               </h1>
-              <span className="px-2 py-0.5 text-[10px] font-mono font-bold tracking-wider rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
-                PHASE 1 + 2 ACTIVE
+              <span className="px-2 py-0.5 text-[10px] font-mono font-bold tracking-wider rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                PHASE 1 + 2 + 3 COMPLETE
               </span>
             </div>
             <p className="text-[11px] text-slate-400 font-mono">
-              Agentic Cinema Hackathon • ClickHouse Reward Oracle + Qwen Swarm + ADK Showrunner
+              Agentic Cinema Hackathon • ClickHouse Reward Oracle + Qwen Swarm + PPO Policy + Showrunner
             </p>
           </div>
         </div>
 
         {/* Action Controls Deck */}
         <div className="flex items-center gap-2.5">
+          {/* Policy Toggle */}
+          {onToggleOptimizer && (
+            <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-[11px] font-mono mr-1">
+              <button
+                onClick={() => onToggleOptimizer("beam_search")}
+                className={`px-2 py-1 rounded transition-all ${
+                  optimizerMode === "beam_search"
+                    ? "bg-cyan-900/60 text-cyan-300 font-semibold border border-cyan-700/50"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+                title="Phase 1: Deterministic Hill Climbing / Beam Search"
+              >
+                Beam Search
+              </button>
+              <button
+                onClick={() => onToggleOptimizer("ppo")}
+                className={`px-2 py-1 rounded transition-all ${
+                  optimizerMode === "ppo"
+                    ? "bg-emerald-900/60 text-emerald-300 font-semibold border border-emerald-700/50"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+                title="Phase 3: Actor-Critic PPO Reinforcement Learning Policy"
+              >
+                PPO Policy
+              </button>
+            </div>
+          )}
           <button
             onClick={onRunOptimization}
             disabled={isRunning}

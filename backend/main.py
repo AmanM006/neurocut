@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from backend.config import settings
 from backend.editing_env import EditingEnvironment, TimelineState, Clip
 from backend.optimizer.beam_search import BeamSearchOptimizer
+from backend.optimizer.ppo_agent import PPOAgent
 from backend.clickhouse.client import clickhouse_client
 from backend.clickhouse.reward_queries import (
     compute_clickhouse_reward,
@@ -37,6 +38,7 @@ app.add_middleware(
 # Active in-memory session registry
 active_environments: Dict[str, EditingEnvironment] = {}
 active_optimizers: Dict[str, BeamSearchOptimizer] = {}
+active_ppo_agents: Dict[str, PPOAgent] = {}
 
 class CreateEpisodeRequest(BaseModel):
     episode_id: Optional[str] = None
@@ -123,21 +125,77 @@ def run_optimization_step(episode_id: str):
     result["video_url"] = f"/api/episodes/{episode_id}/video?t={os.urandom(2).hex()}"
     return result
 
-@app.get("/api/episodes/{episode_id}/optimize/stream")
-async def stream_optimization(episode_id: str, max_steps: int = Query(default=4, ge=1, le=10)):
-    if episode_id not in active_optimizers:
-        env = EditingEnvironment(episode_id=episode_id)
+@app.post("/api/episodes/{episode_id}/optimize/ppo-step")
+def run_ppo_step(episode_id: str):
+    """Executes a single step using the Phase 3 PPO Reinforcement Learning policy."""
+    if episode_id not in active_ppo_agents:
+        env = active_environments.get(episode_id) or EditingEnvironment(episode_id=episode_id)
         active_environments[episode_id] = env
-        active_optimizers[episode_id] = BeamSearchOptimizer(env)
+        active_ppo_agents[episode_id] = PPOAgent(episode_id=episode_id, env=env)
 
-    optimizer = active_optimizers[episode_id]
+    agent = active_ppo_agents[episode_id]
+    result = agent.optimize_step()
+    result["video_url"] = f"/api/episodes/{episode_id}/video?t={os.urandom(2).hex()}"
+    return result
+
+@app.post("/api/episodes/{episode_id}/ppo/train")
+def train_ppo(episode_id: str, steps: int = Query(default=3, ge=1, le=10)):
+    """Runs a multi-step PPO rollout against ClickHouse retention metrics and executes a policy gradient update."""
+    if episode_id not in active_ppo_agents:
+        env = active_environments.get(episode_id) or EditingEnvironment(episode_id=episode_id)
+        active_environments[episode_id] = env
+        active_ppo_agents[episode_id] = PPOAgent(episode_id=episode_id, env=env)
+
+    agent = active_ppo_agents[episode_id]
+    step_history = []
+    for _ in range(steps):
+        step_res = agent.optimize_step()
+        step_history.append(step_res)
+
+    train_metrics = agent.train_step()
+    return {
+        "episode_id": episode_id,
+        "steps_executed": len(step_history),
+        "train_metrics": train_metrics,
+        "latest_step": step_history[-1] if step_history else None
+    }
+
+@app.get("/api/episodes/{episode_id}/optimize/stream")
+async def stream_optimization(
+    episode_id: str,
+    max_steps: int = Query(default=4, ge=1, le=10),
+    optimizer_type: str = Query(default="beam_search")
+):
+    if episode_id not in active_environments:
+        active_environments[episode_id] = EditingEnvironment(episode_id=episode_id)
+
+    env = active_environments[episode_id]
+    if episode_id not in active_optimizers:
+        active_optimizers[episode_id] = BeamSearchOptimizer(env)
+    if episode_id not in active_ppo_agents:
+        active_ppo_agents[episode_id] = PPOAgent(episode_id=episode_id, env=env)
 
     async def event_generator():
-        yield f"data: {json.dumps({'event': 'started', 'episode_id': episode_id})}\n\n"
-        for step_data in optimizer.run_stream(max_steps=max_steps):
-            step_data["video_url"] = f"/api/episodes/{episode_id}/video?t={os.urandom(2).hex()}"
-            yield f"data: {json.dumps({'event': 'step', 'data': step_data})}\n\n"
-            await asyncio.sleep(0.5)
+        yield f"data: {json.dumps({'event': 'started', 'episode_id': episode_id, 'optimizer': optimizer_type})}\n\n"
+        
+        if optimizer_type == "ppo":
+            ppo_agent = active_ppo_agents[episode_id]
+            for step_n in range(max_steps):
+                step_data = ppo_agent.optimize_step()
+                step_data["video_url"] = f"/api/episodes/{episode_id}/video?t={os.urandom(2).hex()}"
+                yield f"data: {json.dumps({'event': 'step', 'data': step_data})}\n\n"
+                await asyncio.sleep(0.5)
+            # Run policy gradient update after rollout
+            metrics = ppo_agent.train_step()
+            yield f"data: {json.dumps({'event': 'trained', 'metrics': metrics})}\n\n"
+        else:
+            # Deterministic Beam Search (Phase 1 Baseline)
+            optimizer = active_optimizers[episode_id]
+            for step_data in optimizer.run_stream(max_steps=max_steps):
+                step_data["video_url"] = f"/api/episodes/{episode_id}/video?t={os.urandom(2).hex()}"
+                yield f"data: {json.dumps({'event': 'step', 'data': step_data})}\n\n"
+                await asyncio.sleep(0.5)
+
         yield f"data: {json.dumps({'event': 'completed', 'episode_id': episode_id})}\n\n"
 
     return StreamingResponse(
