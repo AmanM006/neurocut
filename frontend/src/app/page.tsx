@@ -5,6 +5,7 @@ import { Controls } from "@/components/Controls";
 import { VideoPreview } from "@/components/VideoPreview";
 import { TelemetryChart } from "@/components/TelemetryChart";
 import { ShowrunnerLog, LogEntry } from "@/components/ShowrunnerLog";
+import { TrainingProgress } from "@/components/TrainingProgress";
 
 export default function Home() {
   const [episodeId, setEpisodeId] = useState<string>("ep_main");
@@ -22,6 +23,7 @@ export default function Home() {
   const [selectedSource, setSelectedSource] = useState<string>("all");
   const [comparisonData, setComparisonData] = useState<any[]>([]);
   const [optimizerMode, setOptimizerMode] = useState<"beam_search" | "ppo">("beam_search");
+  const [panelBTab, setPanelBTab] = useState<"telemetry" | "training">("telemetry");
 
   const addLog = useCallback((type: LogEntry["type"], title: string, details?: string, r?: number) => {
     const newEntry: LogEntry = {
@@ -313,18 +315,48 @@ export default function Home() {
             />
           </div>
 
+          {/* Tab Switcher for Panel B / Panel D */}
+          <div className="flex items-center justify-between bg-slate-900/60 p-1 rounded-lg border border-slate-800 text-xs font-mono">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPanelBTab("telemetry")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition ${
+                  panelBTab === "telemetry"
+                    ? "bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <span>Panel B: Audience Retention Curves</span>
+              </button>
+              <button
+                onClick={() => setPanelBTab("training")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition ${
+                  panelBTab === "training"
+                    ? "bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <span>Panel D: PPO RL Policy Training</span>
+              </button>
+            </div>
+          </div>
+
           <div className="flex-1">
-            <TelemetryChart
-              series={series}
-              reward={reward}
-              meanAttention={meanAttention}
-              worstDrop={worstDrop}
-              worstClipId={worstClipId}
-              clickhouseMode={clickhouseMode}
-              selectedSource={selectedSource}
-              onSelectSource={handleSelectSource}
-              comparisonData={comparisonData}
-            />
+            {panelBTab === "telemetry" ? (
+              <TelemetryChart
+                series={series}
+                reward={reward}
+                meanAttention={meanAttention}
+                worstDrop={worstDrop}
+                worstClipId={worstClipId}
+                clickhouseMode={clickhouseMode}
+                selectedSource={selectedSource}
+                onSelectSource={handleSelectSource}
+                comparisonData={comparisonData}
+              />
+            ) : (
+              <TrainingProgress />
+            )}
           </div>
         </div>
 

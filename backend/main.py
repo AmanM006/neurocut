@@ -1,6 +1,7 @@
 import json
 import os
 import asyncio
+import threading
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from fastapi import FastAPI, HTTPException, Query
@@ -39,6 +40,7 @@ app.add_middleware(
 active_environments: Dict[str, EditingEnvironment] = {}
 active_optimizers: Dict[str, BeamSearchOptimizer] = {}
 active_ppo_agents: Dict[str, PPOAgent] = {}
+is_training_active: bool = False
 
 class CreateEpisodeRequest(BaseModel):
     episode_id: Optional[str] = None
@@ -159,6 +161,92 @@ def train_ppo(episode_id: str, steps: int = Query(default=3, ge=1, le=10)):
         "train_metrics": train_metrics,
         "latest_step": step_history[-1] if step_history else None
     }
+
+@app.get("/api/training/progress")
+def get_training_progress():
+    """
+    Returns live training progress for PPO reinforcement learning curve,
+    computed directly via ClickHouse window functions.
+    """
+    try:
+        q = """
+        SELECT
+          episode_num,
+          reward,
+          avg(reward) OVER (
+            ORDER BY episode_num
+            ROWS BETWEEN 19 PRECEDING AND CURRENT ROW
+          ) AS rolling_avg_reward,
+          max(reward) OVER (
+            ORDER BY episode_num
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+          ) AS best_so_far
+        FROM (
+          SELECT
+            toUInt32(splitByChar('_', episode_id)[-1]) AS episode_num,
+            max(reward) AS reward
+          FROM default.edit_attempts
+          WHERE episode_id LIKE 'ppo_train_ep_%'
+          GROUP BY episode_id
+        )
+        ORDER BY episode_num ASC
+        """
+        rows = clickhouse_client.query(q)
+        baseline_res = clickhouse_client.query(
+            "SELECT max(reward) as r FROM default.edit_attempts WHERE episode_id = 'beam_search_baseline'"
+        )
+        baseline_reward = float(baseline_res[0]["r"]) if baseline_res and baseline_res[0]["r"] is not None else 0.6730
+
+        eval_res = clickhouse_client.query(
+            "SELECT max(reward) as r FROM default.edit_attempts WHERE episode_id = 'ppo_final_eval'"
+        )
+        eval_reward = float(eval_res[0]["r"]) if eval_res and eval_res[0]["r"] is not None else None
+
+        best_so_far = float(rows[-1]["best_so_far"]) if rows else 0.0
+        current_ep = int(rows[-1]["episode_num"]) if rows else 0
+
+        return {
+            "status": "training" if is_training_active else "idle",
+            "current_episode": current_ep,
+            "baseline_reward": baseline_reward,
+            "eval_reward": eval_reward,
+            "best_so_far": best_so_far,
+            "points": [
+                {
+                    "episode": int(r["episode_num"]),
+                    "reward": round(float(r["reward"]), 4),
+                    "rolling_avg": round(float(r["rolling_avg_reward"]), 4),
+                    "best_so_far": round(float(r["best_so_far"]), 4)
+                }
+                for r in rows
+            ]
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "points": []
+        }
+
+@app.post("/api/training/start")
+def start_training_job(episodes: int = Query(default=100, ge=10, le=500)):
+    """Launches PPO curriculum training in a background daemon thread."""
+    global is_training_active
+    if is_training_active:
+        return {"status": "already_running", "message": "Training is already in progress"}
+
+    def run_job():
+        global is_training_active
+        is_training_active = True
+        try:
+            from scripts.train_ppo import train_ppo_curriculum
+            train_ppo_curriculum(total_episodes=episodes, steps_per_episode=4, checkpoint_interval=25)
+        finally:
+            is_training_active = False
+
+    t = threading.Thread(target=run_job, daemon=True)
+    t.start()
+    return {"status": "started", "episodes": episodes}
 
 @app.get("/api/episodes/{episode_id}/optimize/stream")
 async def stream_optimization(
