@@ -186,7 +186,7 @@ def get_training_progress():
             toUInt32(splitByChar('_', episode_id)[-1]) AS episode_num,
             max(reward) AS reward
           FROM default.edit_attempts
-          WHERE episode_id LIKE 'ppo_train_ep_%'
+          WHERE episode_id LIKE 'ppo%train_ep_%'
           GROUP BY episode_id
         )
         ORDER BY episode_num ASC
