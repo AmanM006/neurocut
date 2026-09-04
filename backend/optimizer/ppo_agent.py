@@ -169,11 +169,14 @@ if HAS_TORCH:
             value = self.critic(feats)
             return logits, value
 
-        def get_action_and_value(self, state_tensor: torch.Tensor, action: Optional[torch.Tensor] = None):
+        def get_action_and_value(self, state_tensor: torch.Tensor, action: Optional[torch.Tensor] = None, deterministic: bool = False):
             logits, value = self.forward(state_tensor)
             dist = Categorical(logits=logits)
             if action is None:
-                action = dist.sample()
+                if deterministic:
+                    action = torch.argmax(logits, dim=-1)
+                else:
+                    action = dist.sample()
             return action, dist.log_prob(action), dist.entropy(), value
 else:
     PyTorchActorCritic = None
@@ -195,21 +198,25 @@ class VectorizedActorCritic:
         self.W_critic = np.random.randn(64, 1) * 0.1
         self.b_critic = np.zeros(1)
 
-    def forward(self, state: np.ndarray) -> Tuple[np.ndarray, float]:
-        # Shared layer with tanh
+    def forward(self, state: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        # Support both 1D and 2D batch inputs
         hidden = np.tanh(np.dot(state, self.W_shared) + self.b_shared)
         logits = np.dot(hidden, self.W_actor) + self.b_actor
-        value = float((np.dot(hidden, self.W_critic) + self.b_critic).item())
-        return logits, value
+        values = np.dot(hidden, self.W_critic) + self.b_critic
+        return hidden, logits, values
 
-    def sample_action(self, state: np.ndarray, temperature: float = 1.0) -> Tuple[int, float, float]:
-        logits, value = self.forward(state)
+    def sample_action(self, state: np.ndarray, temperature: float = 1.0, deterministic: bool = False) -> Tuple[int, float, float]:
+        hidden, logits, values = self.forward(state)
+        val = float(values.flatten()[0])
+        if deterministic:
+            action_idx = int(np.argmax(logits))
+            return action_idx, 0.0, val
         # Softmax with temperature
         exp_logits = np.exp((logits - np.max(logits)) / max(1e-3, temperature))
         probs = exp_logits / np.sum(exp_logits)
         action_idx = int(np.random.choice(len(probs), p=probs))
         log_prob = float(np.log(max(1e-8, probs[action_idx])))
-        return action_idx, log_prob, value
+        return action_idx, log_prob, val
 
 class PPORolloutBuffer:
     """Stores trajectories for Generalized Advantage Estimation (GAE) updates."""
@@ -277,30 +284,30 @@ class PPOAgent:
             self.optimizer = None
             print("[PPO Agent] Initialized Vectorized CPU Actor-Critic Policy (NumPy).")
 
-    def select_action(self, state: TimelineState, reward_metrics: Optional[RewardMetrics] = None) -> Tuple[ActionSpec, float, float]:
+    def select_action(self, state: TimelineState, reward_metrics: Optional[RewardMetrics] = None, deterministic: bool = False) -> Tuple[ActionSpec, float, float]:
         """Encodes state and selects discrete editing action via policy."""
         state_vec = self.encoder.encode(state, reward_metrics)
         
         if self.has_torch:
             with torch.no_grad():
                 st = torch.from_numpy(state_vec).unsqueeze(0).to(self.device)
-                act_tensor, logp_tensor, _, val_tensor = self.model.get_action_and_value(st)
+                act_tensor, logp_tensor, _, val_tensor = self.model.get_action_and_value(st, deterministic=deterministic)
                 act_idx = int(act_tensor.item())
                 logp = float(logp_tensor.item())
                 val = float(val_tensor.item())
         else:
-            act_idx, logp, val = self.model.sample_action(state_vec)
+            act_idx, logp, val = self.model.sample_action(state_vec, deterministic=deterministic)
 
         action_spec = decode_action(act_idx, state.clips)
         return action_spec, logp, val
 
-    def optimize_step(self) -> Dict[str, Any]:
+    def optimize_step(self, compile_video: bool = True, deterministic: bool = False) -> Dict[str, Any]:
         """
         Executes a single PPO policy step:
         1. Encodes state + ClickHouse retention oracle.
-        2. Samples action from Actor policy.
+        2. Samples action from Actor policy (or argmax if deterministic).
         3. Applies action to physical TimelineState.
-        4. Compiles cut and logs new telemetry to ClickHouse.
+        4. Compiles cut (if compile_video=True) and logs new telemetry to ClickHouse.
         5. Computes retention delta reward R_t - R_{t-1}.
         """
         prev_state = self.env.state.clone()
@@ -308,7 +315,7 @@ class PPOAgent:
         prev_reward = prev_metrics.scalar_reward
 
         # 1. Select action from policy
-        action_spec, logp, val = self.select_action(prev_state, prev_metrics)
+        action_spec, logp, val = self.select_action(prev_state, prev_metrics, deterministic=deterministic)
 
         # 2. Apply action to environment
         action_type = action_spec.action_type
@@ -332,52 +339,57 @@ class PPOAgent:
             elif action_type == "ripple_delete":
                 new_state, applied, msg = self.env.apply_action(prev_state, "ripple_delete", clip_id=target_clip_id)
             elif action_type == "insert_broll":
-                from backend.showrunner.tools import VeoBrollTool
-                veo = VeoBrollTool()
-                broll_clip = veo.generate_broll(
-                    prompt="Dramatic slow-motion cutaway reaction",
-                    scene_context=target_clip_id,
-                    duration_seconds=2.0
+                from backend.showrunner.tools import generate_broll_clip
+                broll_clip = generate_broll_clip(
+                    target_scene=target_clip_id,
+                    prompt="Dramatic slow-motion cutaway reaction"
                 )
                 self.env.shot_pool[broll_clip.clip_id] = broll_clip
                 new_state, applied, msg = self.env.apply_action(prev_state, "insert_broll", target_clip_id=target_clip_id, broll_clip_id=broll_clip.clip_id)
                 verdict = "showrunner_intervened"
 
         if not applied:
-            # Fallback action if target was invalid: trim worst bottleneck clip
-            fallback_target = prev_metrics.worst_clip_id or prev_state.clips[0].clip_id
-            new_state, applied, msg = self.env.apply_action(prev_state, "trim_tail", clip_id=fallback_target, frames=12)
-            action_type = "trim_tail"
-            target_clip_id = fallback_target
-
-        # 3. Physically compile updated video cut
-        video_path = self.env.compile_timeline(new_state)
-
-        # 4. Score and ingest telemetry into ClickHouse Cloud
-        telemetry = self.scorer.score_timeline(new_state)
-        clickhouse_client.insert_telemetry([p.model_dump() for p in telemetry])
-
-        # 5. Query ClickHouse Cloud for new retention oracle
-        new_metrics = compute_clickhouse_reward(self.episode_id, attempt_n=new_state.attempt_n)
-        new_reward = new_metrics.scalar_reward
-
-        # 6. Compute Load-Bearing Retention Delta Reward
-        # r = (R_t - R_{t-1}) * 10 + bonuses - penalties
-        delta_r = (new_reward - prev_reward) * 10.0
-        step_reward = delta_r
-
-        if new_reward > prev_reward:
-            step_reward += 0.20
-            if verdict != "showrunner_intervened":
-                verdict = "improved"
-            self.env.state = new_state
+            # Action invalid (e.g. out of bounds slot or minimum duration reached)
+            verdict = "rejected"
+            step_reward = -0.30
+            new_state = prev_state.clone()
+            new_state.attempt_n += 1
+            new_reward = prev_reward
+            new_metrics = prev_metrics
+            video_path = getattr(prev_state, "compiled_video_path", "") or ""
         else:
-            step_reward -= 0.15
-            verdict = "regressed"
+            # 3. Compile updated video cut (optional during fast training)
+            video_path = ""
+            if compile_video:
+                video_path = self.env.compile_timeline(new_state)
+            else:
+                video_path = getattr(new_state, "compiled_video_path", "") or ""
 
-        # Check if worst bottleneck was resolved
-        if new_metrics.worst_clip_id != prev_metrics.worst_clip_id and new_reward >= prev_reward:
-            step_reward += 0.30  # Bottleneck resolution bonus
+            # 4. Score and ingest telemetry into ClickHouse Cloud
+            telemetry = self.scorer.score_timeline(new_state)
+            clickhouse_client.insert_telemetry([p.model_dump() for p in telemetry])
+
+            # 5. Query ClickHouse Cloud for new retention oracle
+            new_metrics = compute_clickhouse_reward(self.episode_id, attempt_n=new_state.attempt_n)
+            new_reward = new_metrics.scalar_reward
+
+            # 6. Compute Load-Bearing Retention Delta Reward
+            # r = (R_t - R_{t-1}) * 10 + bonuses - penalties
+            delta_r = (new_reward - prev_reward) * 10.0
+            step_reward = delta_r
+
+            if new_reward > prev_reward:
+                step_reward += 0.30
+                if verdict != "showrunner_intervened":
+                    verdict = "improved"
+                self.env.state = new_state
+            else:
+                step_reward -= 0.20
+                verdict = "regressed"
+
+            # Check if worst bottleneck was resolved
+            if new_metrics.worst_clip_id != prev_metrics.worst_clip_id and new_reward >= prev_reward:
+                step_reward += 0.40  # Bottleneck resolution bonus
 
         # 7. Record to rollout buffer
         state_vec = self.encoder.encode(prev_state, prev_metrics)
@@ -414,7 +426,7 @@ class PPOAgent:
             "worst_clip_id": new_metrics.worst_clip_id,
             "worst_drop": new_metrics.worst_drop,
             "mean_attention": new_metrics.mean_attention,
-            "video_url": f"/api/video/{Path(video_path).name}",
+            "video_url": f"/api/video/{Path(video_path).name}" if video_path else "",
             "clips": [c.model_dump() for c in new_state.clips]
         }
 
@@ -462,11 +474,50 @@ class PPOAgent:
                 "value_loss": float(value_loss.item())
             }
         else:
-            # Vectorized NumPy gradient update approximation
+            # Vectorized NumPy analytical policy gradient update
+            states_arr = np.array(self.buffer.states)
+            actions_arr = np.array(self.buffer.actions)
+            adv_arr = np.array(advantages)
+            ret_arr = np.array(returns)
+            
+            # Forward pass across rollout states
+            hidden, logits, _ = self.model.forward(states_arr)
+            exp_logits = np.exp(logits - np.max(logits, axis=-1, keepdims=True))
+            probs = exp_logits / np.sum(exp_logits, axis=-1, keepdims=True)
+            
+            # Policy gradient: grad = probs - 1_at_action, weighted by advantage
+            grad_logits = np.copy(probs)
+            for i, a in enumerate(actions_arr):
+                grad_logits[i, a] -= 1.0
+            grad_logits = grad_logits * adv_arr[:, np.newaxis]
+            
+            # Value loss gradient
+            values_arr = np.dot(hidden, self.model.W_critic) + self.model.b_critic
+            grad_val = (values_arr - ret_arr[:, np.newaxis])
+            
+            # Backprop into Actor & Critic
+            dW_actor = np.dot(hidden.T, grad_logits) / len(states_arr)
+            db_actor = np.mean(grad_logits, axis=0)
+            dW_critic = np.dot(hidden.T, grad_val) / len(states_arr)
+            db_critic = np.mean(grad_val, axis=0)
+            
+            # Backprop into Shared representation
+            dhidden = np.dot(grad_logits, self.model.W_actor.T) + np.dot(grad_val, self.model.W_critic.T)
+            dtanh = (1.0 - hidden ** 2) * dhidden
+            dW_shared = np.dot(states_arr.T, dtanh) / len(states_arr)
+            db_shared = np.mean(dtanh, axis=0)
+            
+            # Parameter update
+            lr = settings.PPO_LR
+            self.model.W_actor -= lr * np.clip(dW_actor, -0.5, 0.5)
+            self.model.b_actor -= lr * np.clip(db_actor, -0.5, 0.5)
+            self.model.W_critic -= lr * np.clip(dW_critic, -0.5, 0.5)
+            self.model.b_critic -= lr * np.clip(db_critic, -0.5, 0.5)
+            self.model.W_shared -= lr * np.clip(dW_shared, -0.5, 0.5)
+            self.model.b_shared -= lr * np.clip(db_shared, -0.5, 0.5)
+            
+            loss = float(np.mean(grad_val ** 2))
             mean_adv = float(np.mean(advantages))
-            loss = float(np.mean((returns - np.array(self.buffer.values)) ** 2))
-            # Parameter update step
-            self.model.W_critic += 0.001 * np.outer(np.mean(self.buffer.states, axis=0), [float(np.mean(returns - self.model.b_critic[0]))])
             metrics = {
                 "loss": round(loss, 4),
                 "policy_loss": round(-mean_adv, 4),
@@ -475,3 +526,74 @@ class PPOAgent:
 
         self.buffer.clear()
         return metrics
+
+    def save_checkpoint(self, path: str):
+        """Saves model weights to a file checkpoint."""
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        if self.has_torch:
+            torch.save({
+                "model_state_dict": self.model.state_dict(),
+                "optimizer_state_dict": self.optimizer.state_dict() if self.optimizer else None
+            }, path)
+        else:
+            np.savez(
+                path,
+                W_shared=self.model.W_shared,
+                b_shared=self.model.b_shared,
+                W_actor=self.model.W_actor,
+                b_actor=self.model.b_actor,
+                W_critic=self.model.W_critic,
+                b_critic=self.model.b_critic
+            )
+
+    def load_checkpoint(self, path: str) -> bool:
+        """Loads model weights from a file checkpoint."""
+        p = Path(path)
+        # Try both with and without .npz / .pt extensions
+        if not p.exists():
+            if Path(f"{path}.npz").exists():
+                p = Path(f"{path}.npz")
+            elif Path(f"{path}.pt").exists():
+                p = Path(f"{path}.pt")
+            else:
+                return False
+        if self.has_torch and str(p).endswith(".pt"):
+            checkpoint = torch.load(str(p), map_location=self.device)
+            self.model.load_state_dict(checkpoint["model_state_dict"])
+            if self.optimizer and checkpoint.get("optimizer_state_dict"):
+                self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            return True
+        else:
+            data = np.load(str(p))
+            self.model.W_shared = data["W_shared"]
+            self.model.b_shared = data["b_shared"]
+            self.model.W_actor = data["W_actor"]
+            self.model.b_actor = data["b_actor"]
+            self.model.W_critic = data["W_critic"]
+            self.model.b_critic = data["b_critic"]
+            return True
+
+    def reset_episode(self, episode_id: str) -> float:
+        """Resets the environment for a new training or evaluation episode."""
+        self.episode_id = episode_id
+        self.env = EditingEnvironment(episode_id=episode_id)
+        
+        # Ingest initial rough cut telemetry
+        initial_telemetry = self.scorer.score_timeline(self.env.state)
+        clickhouse_client.insert_telemetry([p.model_dump() for p in initial_telemetry])
+        
+        # Compute baseline reward via ClickHouse
+        initial_metrics = compute_clickhouse_reward(episode_id, attempt_n=0)
+        self.env.state.last_reward = initial_metrics.scalar_reward
+        
+        clickhouse_client.insert_edit_attempt(
+            episode_id=episode_id,
+            attempt_n=0,
+            action="initial_rough_cut",
+            target_clip_id="",
+            reward=float(initial_metrics.scalar_reward),
+            verdict="initial",
+            reasoning="PPO Training episode starting timeline"
+        )
+        return float(initial_metrics.scalar_reward)

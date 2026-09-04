@@ -118,11 +118,22 @@ export const Controls: React.FC<ControlsProps> = ({
             onClick={onRunSwarm}
             disabled={isRunning}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-purple-950/60 hover:bg-purple-900/80 text-purple-300 border border-purple-700/50 transition-all active:scale-95 disabled:opacity-50"
-            title="Run Phase 2 Qwen 2.5-VL 4-Persona Audience Swarm at 2 FPS"
+            title="Fast local CPU simulated preview across 4 personas"
           >
             <Users className="w-3.5 h-3.5 text-purple-400" />
-            <span>Qwen Swarm (2 FPS)</span>
+            <span>Qwen Swarm (Preview)</span>
           </button>
+
+          <a
+            href="https://colab.research.google.com/github/AmanM006/neurocut/blob/main/notebooks/qwen_swarm_colab.ipynb"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-mono text-purple-300 hover:text-white bg-purple-900/30 hover:bg-purple-800/40 border border-purple-700/40 transition active:scale-95"
+            title="Launch Real Qwen2.5-VL 3B Model on free NVIDIA T4 GPU in Google Colab"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Colab T4 GPU</span>
+          </a>
 
           <button
             onClick={onForceIntervention}

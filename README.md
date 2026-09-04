@@ -103,11 +103,17 @@ flowchart TD
 - **40 Discrete Action Space**: 5 action primitives (`trim_head`, `trim_tail`, `swap_take`, `ripple_delete`, `insert_broll`) $\times$ 8 clip slots.
 - **ClickHouse Delta Reward Oracle**: Computes $r_t = 10 \cdot (R_t - R_{t-1}) + \text{action bonus}$ directly from ClickHouse window query retention deltas.
 - **Actor-Critic Network**: Supports full PyTorch GPU tensor training and CPU NumPy fallback with Generalized Advantage Estimation (GAE) and clipped surrogate loss.
+- **Live Curriculum Training & Checkpoints**: `scripts/train_ppo.py` saves checkpoints to `backend/models/` every 25 episodes; ClickHouse SQL window function queries at `/api/training/progress` power **Panel D (PPO Training)** in the Next.js frontend.
 
-### 5. Phased Non-Destructive Architecture
+### 5. Ground-Truth Baseline vs RL Policy Benchmark
+- **Beam Search Baseline (`beam_search_baseline`)**: **0.6730** final reward *(Verified deterministic primary demo mode)*.
+- **PPO Training Exploration Peak**: **0.7301** in Episode 15.
+- **PPO Frozen Evaluation (`ppo_final_eval`)**: **0.5000** *(Conservative policy convergence under short curriculum)*.
+
+### 6. Phased Non-Destructive Architecture
 - **Phase 1 (Deterministic Core)**: FastAPI backend, FFmpeg compiler, heuristic Gemini scorer, ClickHouse SQL window reward engine, Beam Search, ADK Showrunner agent, Next.js dashboard, Docker infra.
-- **Phase 2 (Synthetic Audience Swarm)**: Module-isolated in `backend/scoring/qwen_swarm.py` with multi-persona prompting and 1-click Google Colab T4 GPU worker.
-- **Phase 3 (PPO RL Policy)**: Module-isolated in `backend/optimizer/ppo_agent.py` with `/api/episodes/{id}/optimize/ppo-step` and `/api/episodes/{id}/ppo/train`.
+- **Phase 2 (Synthetic Audience Swarm)**: Module-isolated in `backend/scoring/qwen_swarm.py` with fast local CPU preview and 1-click Google Colab T4 GPU worker streaming to ClickHouse Cloud.
+- **Phase 3 (PPO RL Policy)**: Module-isolated in `backend/optimizer/ppo_agent.py` with `/api/episodes/{id}/optimize/ppo-step`, `/api/training/progress`, and Next.js Panel D.
 
 ---
 
@@ -148,6 +154,12 @@ python tests/test_api.py
 
 # Verify Phase 3 PPO RL Policy & ClickHouse reward delta oracle
 python tests/test_ppo_agent.py
+
+# Run Ground-Truth Baseline (Beam Search)
+python scripts/run_baseline.py
+
+# Run PPO Reinforcement Learning Training Curriculum (50 episodes)
+python scripts/train_ppo.py 50
 ```
 
 ### 4. Start the Application
