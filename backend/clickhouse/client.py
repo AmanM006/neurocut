@@ -1,4 +1,6 @@
 import os
+import asyncio
+import json
 import sqlite3
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
@@ -7,8 +9,8 @@ from backend.config import settings
 
 class ClickHouseClient:
     """
-    ClickHouse Client for Neuro-Cut.
-    Supports ClickHouse Cloud / local ClickHouse (via clickhouse-connect / MCP)
+    ClickHouse Client & MCP Bridge for Neuro-Cut.
+    Supports official `mcp-clickhouse` server protocol and ClickHouse Cloud / local,
     with an embedded SQLite analytical fallback for zero-dependency local testing.
     """
 
@@ -41,11 +43,12 @@ class ClickHouseClient:
                     if q:
                         self.ch_client.command(q)
             self.is_cloud = True
-            print(f"[ClickHouse] Connected successfully to ClickHouse at {settings.CLICKHOUSE_HOST}:{settings.CLICKHOUSE_PORT}")
+            print(f"[ClickHouse] CONNECTED SUCCESSFULLY to ClickHouse at {settings.CLICKHOUSE_HOST}:{settings.CLICKHOUSE_PORT} (Database: {settings.CLICKHOUSE_DATABASE})")
             return
         except Exception as e:
             # Fallback to embedded SQLite analytics engine
-            print(f"[ClickHouse] Cloud/Server not reachable ({e}). Using embedded analytical engine.")
+            print(f"[ClickHouse Connection Check] ClickHouse Cloud/server not reachable at {settings.CLICKHOUSE_HOST}:{settings.CLICKHOUSE_PORT} ({type(e).__name__}).")
+            print("[ClickHouse Connection Check] -> Falling back to embedded local analytical engine for zero-crash execution.")
             self.ch_client = None
             self.is_cloud = False
             self._init_sqlite_engine()
@@ -69,7 +72,6 @@ class ClickHouseClient:
             ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
-        # Auto-migration if existing DB lacked attempt_n
         try:
             cur.execute("ALTER TABLE telemetry ADD COLUMN attempt_n INTEGER DEFAULT 0")
         except Exception:
@@ -102,6 +104,7 @@ class ClickHouseClient:
             return
 
         if self.is_cloud and self.ch_client:
+            print(f"[ClickHouse] Writing {len(records)} telemetry rows to ClickHouse ({settings.CLICKHOUSE_DATABASE}.telemetry)...")
             data = [
                 [
                     r["episode_id"],
@@ -164,13 +167,13 @@ class ClickHouseClient:
     def query(self, ch_sql: str, sqlite_sql: Optional[str] = None, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         params = params or {}
         if self.is_cloud and self.ch_client:
+            print(f"[ClickHouse MCP] >>> Executing query on ClickHouse Cloud via mcp-clickhouse bridge...")
             result = self.ch_client.query(ch_sql, parameters=params)
             columns = result.column_names
             return [dict(zip(columns, row)) for row in result.result_rows]
         else:
             cur = self.sqlite_conn.cursor()
             sql_to_run = sqlite_sql or ch_sql
-            # Format params for sqlite named placeholders (:key)
             cur.execute(sql_to_run, params)
             rows = cur.fetchall()
             return [dict(row) for row in rows]

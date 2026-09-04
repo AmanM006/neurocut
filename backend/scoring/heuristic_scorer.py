@@ -146,41 +146,51 @@ class HeuristicScorer:
         )
 
     def _evaluate_with_gemini(self, state: TimelineState) -> Dict[str, Dict[str, float]]:
-        """Invokes Gemini to evaluate sequence pacing and engagement."""
-        try:
-            summary = [
-                {
-                    "clip_id": c.clip_id,
-                    "scene": c.scene_id,
-                    "duration_sec": c.duration_seconds,
-                    "is_broll": c.is_broll,
-                    "description": c.description
-                }
-                for c in state.clips
-            ]
-            prompt = (
-                "You are an expert film editor & audience engagement analyst for the Neuro-Cut system. "
-                "Analyze the following sequence of shots and return JSON with predicted audience engagement "
-                "on a 0.0 to 1.0 scale for each clip_id: attention, cognitive_load, arousal.\n\n"
-                f"Timeline: {json.dumps(summary)}\n\n"
-                "Return valid JSON ONLY in this format:\n"
-                '{"scores": {"<clip_id>": {"attention": float, "cognitive_load": float, "arousal": float}}}'
-            )
-            # Call Gemini
-            if hasattr(self.gemini_client, "models"):
-                # Google GenAI SDK v1/v2
-                response = self.gemini_client.models.generate_content(
-                    model=settings.GEMINI_MODEL,
-                    contents=prompt
-                )
-                text = response.text
-            else:
-                response = self.gemini_client.generate_content(prompt)
-                text = response.text
+        """Invokes Gemini to evaluate sequence pacing and engagement with automatic non-rate-limited fallback."""
+        summary = [
+            {
+                "clip_id": c.clip_id,
+                "scene": c.scene_id,
+                "duration_sec": c.duration_seconds,
+                "is_broll": c.is_broll,
+                "description": c.description
+            }
+            for c in state.clips
+        ]
+        prompt = (
+            "You are an expert film editor & audience engagement analyst for the Neuro-Cut system. "
+            "Analyze the following sequence of shots and return JSON with predicted audience engagement "
+            "on a 0.0 to 1.0 scale for each clip_id: attention, cognitive_load, arousal.\n\n"
+            f"Timeline: {json.dumps(summary)}\n\n"
+            "Return valid JSON ONLY in this format:\n"
+            '{"scores": {"<clip_id>": {"attention": float, "cognitive_load": float, "arousal": float}}}'
+        )
 
-            # Clean json
-            clean_text = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-            data = json.loads(clean_text)
-            return data.get("scores", {})
-        except Exception:
-            return {}
+        candidate_models = [settings.GEMINI_MODEL, "gemini-3.5-flash", "gemini-2.5-flash-lite"]
+        # deduplicate while preserving order
+        candidate_models = list(dict.fromkeys(candidate_models))
+
+        for model in candidate_models:
+            try:
+                print(f"[Scorer] >>> CALLING REAL GEMINI API ({model}) for {len(state.clips)} shots...")
+                if hasattr(self.gemini_client, "models"):
+                    response = self.gemini_client.models.generate_content(
+                        model=model,
+                        contents=prompt
+                    )
+                    text = response.text
+                else:
+                    response = self.gemini_client.generate_content(prompt)
+                    text = response.text
+
+                clean_text = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+                data = json.loads(clean_text)
+                scores = data.get("scores", {})
+                if scores:
+                    print(f"[Scorer] <<< REAL GEMINI API SUCCESS ({model}): Scores received for {list(scores.keys())}")
+                    return scores
+            except Exception as e:
+                print(f"[Scorer] Model {model} attempt failed: {e}")
+
+        print("[Scorer] Gemini API unavailable or quota exhausted — using cinematic rule engine fallback.")
+        return {}

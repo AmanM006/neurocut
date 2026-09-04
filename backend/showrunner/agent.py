@@ -85,30 +85,41 @@ class ShowrunnerAgent:
 
         # If Gemini client is active, request creative directorial reasoning
         if self.gemini_client:
-            try:
-                prompt = (
-                    "You are an acclaimed Hollywood Showrunner supervising the AI editing room for Neuro-Cut. "
-                    f"A scene containing clip '{clip_id}' ({target_clip.description if target_clip else ''}) "
-                    f"has experienced a severe audience drop-off of {worst_drop*100:.1f}%. "
-                    "Simple trimming or alternate takes failed to rescue engagement. "
-                    "You must diagnose the pacing flaw and propose a specific B-roll cutaway shot to inject.\n\n"
-                    "Respond with JSON ONLY:\n"
-                    '{"reasoning": "<directorial diagnosis and strategy>", "broll_prompt": "<visual description of B-roll shot>"}'
-                )
-                if hasattr(self.gemini_client, "models"):
-                    res = self.gemini_client.models.generate_content(
-                        model=settings.GEMINI_MODEL,
-                        contents=prompt
-                    )
-                    text = res.text
-                else:
-                    res = self.gemini_client.generate_content(prompt)
-                    text = res.text
-                clean_text = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-                data = json.loads(clean_text)
-                return data["reasoning"], data["broll_prompt"]
-            except Exception:
-                pass
+            candidate_models = [settings.GEMINI_MODEL, "gemini-3.5-flash", "gemini-2.5-flash-lite"]
+            candidate_models = list(dict.fromkeys(candidate_models))
+
+            prompt = (
+                "You are an acclaimed Hollywood Showrunner supervising the AI editing room for Neuro-Cut. "
+                f"A scene containing clip '{clip_id}' ({target_clip.description if target_clip else ''}) "
+                f"has experienced an audience drop-off of {worst_drop*100:.1f}%. "
+                "Simple trimming or alternate takes failed to rescue engagement. "
+                "You must diagnose the pacing flaw and propose a specific B-roll cutaway shot to inject.\n\n"
+                "Respond with JSON ONLY:\n"
+                '{"reasoning": "<directorial diagnosis and strategy>", "broll_prompt": "<visual description of B-roll shot>"}'
+            )
+
+            for model in candidate_models:
+                try:
+                    print(f"[Showrunner Agent] >>> CALLING REAL GEMINI API ({model}) for editorial diagnosis...")
+                    if hasattr(self.gemini_client, "models"):
+                        res = self.gemini_client.models.generate_content(
+                            model=model,
+                            contents=prompt
+                        )
+                        text = res.text
+                    else:
+                        res = self.gemini_client.generate_content(prompt)
+                        text = res.text
+
+                    clean_text = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+                    data = json.loads(clean_text)
+                    if "reasoning" in data and "broll_prompt" in data:
+                        print(f"[Showrunner Agent] <<< REAL GEMINI API DIAGNOSIS ({model}): {data['reasoning'][:60]}...")
+                        return data["reasoning"], data["broll_prompt"]
+                except Exception as e:
+                    print(f"[Showrunner Agent] Model {model} attempt failed: {e}")
+
+        print("[Showrunner Agent] Gemini API unavailable or quota exhausted — using directorial rule engine fallback.")
 
         # Deterministic expert editorial rules fallback
         reasoning = (
