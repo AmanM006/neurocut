@@ -12,7 +12,20 @@ import {
   CartesianGrid,
   ReferenceLine
 } from "recharts";
-import { BrainCircuit, TrendingUp, Play, RefreshCw, Trophy, Target, ShieldCheck, ExternalLink } from "lucide-react";
+import {
+  BrainCircuit,
+  TrendingUp,
+  Play,
+  RefreshCw,
+  Trophy,
+  Target,
+  ShieldCheck,
+  ExternalLink,
+  Award,
+  Info,
+  Sparkles,
+  CheckCircle2
+} from "lucide-react";
 
 interface TrainingPoint {
   episode: number;
@@ -34,6 +47,7 @@ export const TrainingProgress: React.FC = () => {
   const [data, setData] = useState<ProgressResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [isStarting, setIsStarting] = useState<boolean>(false);
+  const [showArchitectureInfo, setShowArchitectureInfo] = useState<boolean>(false);
 
   const fetchProgress = useCallback(async () => {
     try {
@@ -73,8 +87,13 @@ export const TrainingProgress: React.FC = () => {
   const points = data?.points || [];
   const baselineReward = data?.baseline_reward ?? 0.6730;
   const bestSoFar = data?.best_so_far ?? 0.0;
+  const evalReward = data?.eval_reward ?? null;
   const currentEp = data?.current_episode ?? 0;
-  const isBeatingBaseline = bestSoFar >= baselineReward;
+
+  // Empirical Champion Logic:
+  // Evaluated frozen policy is the true benchmark. Exploration peak indicates discovery capacity.
+  const isPPOChampion = evalReward !== null && evalReward >= baselineReward;
+  const ppoPeakBeatsBaseline = bestSoFar >= baselineReward;
 
   return (
     <div className="bg-[#101620] border border-slate-800 rounded-xl p-4 flex flex-col h-full shadow-2xl">
@@ -105,9 +124,20 @@ export const TrainingProgress: React.FC = () => {
         {/* Action Controls */}
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setShowArchitectureInfo(!showArchitectureInfo)}
+            className={`p-1.5 rounded-lg border transition ${
+              showArchitectureInfo
+                ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                : "text-slate-400 hover:text-slate-200 bg-slate-800/60 hover:bg-slate-800 border-slate-700/50"
+            }`}
+            title="Architectural Role Distinction: P1 Baseline vs P3 Policy"
+          >
+            <Info className="w-3.5 h-3.5" />
+          </button>
+          <button
             onClick={fetchProgress}
             disabled={loading}
-            className="p-1.5 text-slate-400 hover:text-slate-200 bg-slate-800/60 hover:bg-slate-800 rounded-lg transition"
+            className="p-1.5 text-slate-400 hover:text-slate-200 bg-slate-800/60 hover:bg-slate-800 rounded-lg transition border border-slate-700/50"
             title="Refresh metrics from ClickHouse"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
@@ -117,9 +147,9 @@ export const TrainingProgress: React.FC = () => {
             target="_blank"
             rel="noreferrer"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 shadow-lg transition font-mono"
-            title="Train 100-300 PPO episodes on Google Colab Cloud GPU to keep local machine free"
+            title="Train 5,000 PPO episodes on Google Colab Cloud GPU to keep local machine free"
           >
-            <span>Colab Worker</span>
+            <span>Colab 5K Run</span>
             <ExternalLink className="w-3 h-3" />
           </a>
           <button
@@ -133,67 +163,114 @@ export const TrainingProgress: React.FC = () => {
         </div>
       </div>
 
-      {/* KPI Banners */}
-      <div className="grid grid-cols-4 gap-2 mb-3">
-        <div className="bg-slate-900/80 border border-slate-800/80 rounded-lg p-2 flex flex-col">
-          <span className="text-[10px] uppercase font-mono text-slate-400 flex items-center gap-1">
-            <Target className="w-3 h-3 text-cyan-400" /> Current Episode
-          </span>
-          <span className="text-sm font-bold font-mono text-white mt-0.5">
-            Ep #{currentEp}
-          </span>
+      {/* Explanatory Architecture Drawer (Collapsible) */}
+      {showArchitectureInfo && (
+        <div className="bg-slate-900/90 border border-amber-500/30 rounded-lg p-2.5 mb-3 text-xs font-mono text-slate-300 space-y-1.5">
+          <div className="flex items-center gap-1.5 text-amber-400 font-bold">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Architectural Roles: Ground-Truth Baseline vs Neural Policy</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
+            <div className="bg-slate-950/60 p-2 rounded border border-blue-500/20">
+              <span className="text-blue-400 font-bold block mb-0.5">Phase 1: Beam Search Baseline</span>
+              <p className="text-slate-400 leading-tight">
+                Deterministic graph-search standard delivering guaranteed <strong className="text-blue-300">0.6730</strong> retention reward. Production fallback that runs anywhere without GPU.
+              </p>
+            </div>
+            <div className="bg-slate-950/60 p-2 rounded border border-amber-500/20">
+              <span className="text-amber-400 font-bold block mb-0.5">Phase 3: PPO Neural Policy</span>
+              <p className="text-slate-400 leading-tight">
+                Self-optimizing Actor-Critic trained over ClickHouse audience retention windows. Explores non-linear pacing cuts to surpass deterministic heuristics.
+              </p>
+            </div>
+          </div>
         </div>
+      )}
 
-        <div className="bg-slate-900/80 border border-slate-800/80 rounded-lg p-2 flex flex-col">
-          <span className="text-[10px] uppercase font-mono text-slate-400 flex items-center gap-1">
-            <TrendingUp className="w-3 h-3 text-amber-400" /> Rolling Avg (20)
-          </span>
-          <span className="text-sm font-bold font-mono text-amber-400 mt-0.5">
-            {points.length > 0 ? points[points.length - 1].rolling_avg.toFixed(4) : "0.0000"}
-          </span>
-        </div>
-
-        <div className="bg-slate-900/80 border border-slate-800/80 rounded-lg p-2 flex flex-col">
-          <span className="text-[10px] uppercase font-mono text-slate-400 flex items-center gap-1">
-            <Trophy className="w-3 h-3 text-emerald-400" /> Best So Far
-          </span>
-          <span className="text-sm font-bold font-mono text-emerald-400 mt-0.5">
-            {bestSoFar.toFixed(4)}
-          </span>
-        </div>
-
-        <div className="bg-slate-900/80 border border-slate-800/80 rounded-lg p-2 flex flex-col">
-          <span className="text-[10px] uppercase font-mono text-slate-400 flex items-center gap-1">
-            <ShieldCheck className="w-3 h-3 text-blue-400" /> P1 Baseline
-          </span>
-          <span className="text-sm font-bold font-mono text-blue-400 mt-0.5">
-            {baselineReward.toFixed(4)}
-          </span>
-        </div>
-      </div>
-
-      {/* Head-to-Head Status Callout */}
-      <div className={`px-3 py-2 rounded-lg border text-xs font-mono mb-3 flex items-center justify-between ${
-        isBeatingBaseline
-          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
-          : "bg-slate-900/60 border-slate-800 text-slate-300"
+      {/* Current Champion Banner */}
+      <div className={`rounded-lg border p-2.5 mb-3 transition-all ${
+        isPPOChampion
+          ? "bg-emerald-950/40 border-emerald-500/40 shadow-lg shadow-emerald-950/50"
+          : "bg-slate-900/90 border-slate-700/80 shadow-md"
       }`}>
-        <div className="flex items-center gap-2">
-          <span className="font-bold">
-            {isBeatingBaseline ? "🏆 RL Policy Outperforming Baseline:" : "⚖️ RL Policy vs Deterministic Core:"}
-          </span>
-          <span>
-            {bestSoFar > 0
-              ? `PPO Best: ${bestSoFar.toFixed(4)} | Beam Search: ${baselineReward.toFixed(4)} (${(
-                  ((bestSoFar - baselineReward) / baselineReward) *
-                  100
-                ).toFixed(1)}% delta)`
-              : "Awaiting training iterations to establish comparison"}
+        <div className="flex items-center justify-between border-b border-slate-800/80 pb-2 mb-2">
+          <div className="flex items-center gap-2">
+            <div className={`p-1 rounded ${isPPOChampion ? "bg-emerald-500/20 text-emerald-400" : "bg-blue-500/20 text-blue-400"}`}>
+              <Award className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold font-mono uppercase tracking-wide text-slate-100">
+                  Current Production Champion:
+                </span>
+                <span className={`px-2 py-0.5 rounded text-[11px] font-bold font-mono ${
+                  isPPOChampion
+                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                    : "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                }`}>
+                  {isPPOChampion ? "👑 PPO NEURAL POLICY" : "🛡️ BEAM SEARCH BASELINE"}
+                </span>
+              </div>
+            </div>
+          </div>
+          <span className="text-[10px] font-mono text-slate-400">
+            Ground-Truth: ClickHouse Cloud
           </span>
         </div>
-        <span className="text-[10px] text-slate-400">
-          Source: ClickHouse `default.edit_attempts`
-        </span>
+
+        {/* Head-to-Head Stats Grid */}
+        <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+          {/* Baseline Side */}
+          <div className="bg-slate-950/70 rounded p-2 border border-slate-800 flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-1 text-[10px] text-blue-400 font-semibold uppercase">
+                <CheckCircle2 className="w-3 h-3" /> Phase 1 Beam Search
+              </div>
+              <div className="text-sm font-bold text-white mt-0.5">
+                {baselineReward.toFixed(4)}
+              </div>
+              <span className="text-[10px] text-slate-500">Deterministic Guarantee</span>
+            </div>
+            {!isPPOChampion && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                ACTIVE CHAMPION
+              </span>
+            )}
+          </div>
+
+          {/* PPO Side */}
+          <div className={`bg-slate-950/70 rounded p-2 border flex items-center justify-between ${
+            isPPOChampion ? "border-emerald-500/50" : "border-slate-800"
+          }`}>
+            <div>
+              <div className="flex items-center gap-1 text-[10px] text-amber-400 font-semibold uppercase">
+                <BrainCircuit className="w-3 h-3" /> Phase 3 PPO Policy
+              </div>
+              <div className="text-sm font-bold mt-0.5 flex items-center gap-2">
+                <span className={ppoPeakBeatsBaseline ? "text-emerald-400" : "text-white"}>
+                  {bestSoFar.toFixed(4)}
+                </span>
+                <span className="text-[10px] text-slate-400 font-normal">
+                  (Peak) {evalReward !== null ? `| Eval: ${evalReward.toFixed(4)}` : ""}
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-500">
+                {ppoPeakBeatsBaseline
+                  ? `+${(((bestSoFar - baselineReward) / baselineReward) * 100).toFixed(1)}% peak exploration delta`
+                  : "Curriculum training in progress"}
+              </span>
+            </div>
+            {isPPOChampion ? (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                ACTIVE CHAMPION
+              </span>
+            ) : ppoPeakBeatsBaseline ? (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                PEAK AHEAD
+              </span>
+            ) : null}
+          </div>
+        </div>
       </div>
 
       {/* Recharts Curve Visualization */}
