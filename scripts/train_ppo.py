@@ -78,6 +78,9 @@ def train_ppo_curriculum(total_episodes: int = 150, steps_per_episode: int = 4, 
                 agent.save_checkpoint(best_checkpoint_path)
                 print(f"  *** NEW BEST MODEL SAVED! Eval: {best_eval_reward:.4f} ***")
 
+            # Clear eval transitions from rollout buffer
+            agent.buffer.clear()
+
     total_time = time.time() - start_time
     print("\n" + "=" * 70)
     print(f"      PPO TRAINING COMPLETED IN {total_time:.1f}s")

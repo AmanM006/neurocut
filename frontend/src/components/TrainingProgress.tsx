@@ -12,7 +12,7 @@ import {
   CartesianGrid,
   ReferenceLine
 } from "recharts";
-import { BrainCircuit, TrendingUp, Play, RefreshCw, Trophy, Target, ShieldCheck } from "lucide-react";
+import { BrainCircuit, TrendingUp, Play, RefreshCw, Trophy, Target, ShieldCheck, ExternalLink } from "lucide-react";
 
 interface TrainingPoint {
   episode: number;
@@ -112,13 +112,23 @@ export const TrainingProgress: React.FC = () => {
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
           </button>
+          <a
+            href="https://colab.research.google.com/github/AmanM006/neurocut/blob/main/notebooks/train_ppo_colab.ipynb"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 shadow-lg transition font-mono"
+            title="Train 100-300 PPO episodes on Google Colab Cloud GPU to keep local machine free"
+          >
+            <span>Colab Worker</span>
+            <ExternalLink className="w-3 h-3" />
+          </a>
           <button
             onClick={handleStartTraining}
             disabled={isStarting || data?.status === "training"}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 shadow-lg shadow-amber-500/10 transition font-mono"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
-            {data?.status === "training" ? "Training..." : "Train 50 Eps"}
+            {data?.status === "training" ? "Training..." : "Train Local"}
           </button>
         </div>
       </div>
