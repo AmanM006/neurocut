@@ -40,12 +40,12 @@ class Settings(BaseSettings):
     GCP_LOCATION: str = os.getenv("GCP_LOCATION", "us-central1")
 
     # ClickHouse Cloud / Local
-    CLICKHOUSE_HOST: str = os.getenv("CLICKHOUSE_HOST", "localhost")
-    CLICKHOUSE_PORT: int = int(os.getenv("CLICKHOUSE_PORT", "8123"))
+    CLICKHOUSE_HOST: str = os.getenv("CLICKHOUSE_HOST", "fwybcmwtlx.asia-southeast1.gcp.clickhouse.cloud")
+    CLICKHOUSE_PORT: int = int(os.getenv("CLICKHOUSE_PORT", "8443"))
     CLICKHOUSE_USER: str = os.getenv("CLICKHOUSE_USER", "default")
-    CLICKHOUSE_PASSWORD: str = os.getenv("CLICKHOUSE_PASSWORD", "")
-    CLICKHOUSE_DATABASE: str = os.getenv("CLICKHOUSE_DATABASE", "neurocut")
-    CLICKHOUSE_SECURE: bool = os.getenv("CLICKHOUSE_SECURE", "false").lower() in ("true", "1", "yes")
+    CLICKHOUSE_PASSWORD: str = os.getenv("CLICKHOUSE_PASSWORD", "2~gQ9oPIQ3CEU")
+    CLICKHOUSE_DATABASE: str = os.getenv("CLICKHOUSE_DATABASE", "default")
+    CLICKHOUSE_SECURE: bool = os.getenv("CLICKHOUSE_SECURE", "true").lower() in ("true", "1", "yes")
 
     # MCP ClickHouse server
     MCP_CLICKHOUSE_COMMAND: str = os.getenv("MCP_CLICKHOUSE_COMMAND", "npx -y @clickhouse/mcp-server")
