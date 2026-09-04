@@ -97,10 +97,17 @@ flowchart TD
 - Every action produces a genuine, physically playable `.mp4` video file with synchronized audio via FFmpeg.
 - Includes a built-in procedural cinematic sample shot generator for instant zero-friction testing.
 
-### 4. Phased Non-Destructive Architecture
+### 4. Phase 3: PPO Reinforcement Learning Policy with ClickHouse Reward Delta
+- **Dual Optimization Architecture**: Toggle between **Deterministic Beam Search** (Phase 1 baseline) and the **PPO Reinforcement Learning Policy** (Phase 3) directly from the UI control deck.
+- **64-Dimensional Timeline State Encoder**: Encodes normalized clip durations, take configurations, B-roll flags, and real ClickHouse telemetry curves into an observation vector $s_t \in \mathbb{R}^{64}$.
+- **40 Discrete Action Space**: 5 action primitives (`trim_head`, `trim_tail`, `swap_take`, `ripple_delete`, `insert_broll`) $\times$ 8 clip slots.
+- **ClickHouse Delta Reward Oracle**: Computes $r_t = 10 \cdot (R_t - R_{t-1}) + \text{action bonus}$ directly from ClickHouse window query retention deltas.
+- **Actor-Critic Network**: Supports full PyTorch GPU tensor training and CPU NumPy fallback with Generalized Advantage Estimation (GAE) and clipped surrogate loss.
+
+### 5. Phased Non-Destructive Architecture
 - **Phase 1 (Deterministic Core)**: FastAPI backend, FFmpeg compiler, heuristic Gemini scorer, ClickHouse SQL window reward engine, Beam Search, ADK Showrunner agent, Next.js dashboard, Docker infra.
-- **Phase 2 (Synthetic Audience Swarm)**: Module-isolated in `backend/scoring/qwen_swarm.py` with multi-persona prompting.
-- **Phase 3 (PPO RL Policy)**: Module-isolated in `backend/optimizer/ppo_agent.py` for continuous policy training.
+- **Phase 2 (Synthetic Audience Swarm)**: Module-isolated in `backend/scoring/qwen_swarm.py` with multi-persona prompting and 1-click Google Colab T4 GPU worker.
+- **Phase 3 (PPO RL Policy)**: Module-isolated in `backend/optimizer/ppo_agent.py` with `/api/episodes/{id}/optimize/ppo-step` and `/api/episodes/{id}/ppo/train`.
 
 ---
 
@@ -138,6 +145,9 @@ python tests/test_optimizer.py
 
 # Verify all REST & SSE API endpoints
 python tests/test_api.py
+
+# Verify Phase 3 PPO RL Policy & ClickHouse reward delta oracle
+python tests/test_ppo_agent.py
 ```
 
 ### 4. Start the Application
