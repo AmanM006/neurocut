@@ -32,9 +32,12 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     PORT: int = 8000
 
-    # Google Gemini & ADK
+    # Google Gemini, ADK & Vertex AI (Enterprise High Quotas & Veo)
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    USE_VERTEX_AI: bool = os.getenv("USE_VERTEX_AI", "true").lower() in ("true", "1", "yes")
+    GCP_PROJECT_ID: str = os.getenv("GCP_PROJECT_ID", "agent-505917")
+    GCP_LOCATION: str = os.getenv("GCP_LOCATION", "us-central1")
 
     # ClickHouse Cloud / Local
     CLICKHOUSE_HOST: str = os.getenv("CLICKHOUSE_HOST", "localhost")
@@ -75,3 +78,15 @@ class Settings(BaseSettings):
         extra = "ignore"
 
 settings = Settings()
+
+def get_genai_client():
+    """Returns an authenticated GenAI Client using Vertex AI (GCP) or API key fallback."""
+    try:
+        from google import genai
+        if settings.USE_VERTEX_AI and settings.GCP_PROJECT_ID:
+            return genai.Client(vertexai=True, project=settings.GCP_PROJECT_ID, location=settings.GCP_LOCATION)
+        elif settings.GEMINI_API_KEY:
+            return genai.Client(api_key=settings.GEMINI_API_KEY)
+    except Exception as e:
+        print(f"[GenAI Client] Failed to initialize Vertex AI client: {e}")
+    return None
