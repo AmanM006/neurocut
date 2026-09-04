@@ -38,12 +38,12 @@ def generate_broll_clip(target_scene: str, prompt: str, style: str = "cinematic 
     duration_sec = 2.5
     total_frames = int(duration_sec * 24)
 
-    # 1. Attempt Veo / Imagen video generation if API key is active
+    # 1. Attempt Veo / Imagen video generation via Vertex AI
     generated_via_api = False
-    if settings.GEMINI_API_KEY:
+    from backend.config import get_genai_client
+    client = get_genai_client()
+    if client:
         try:
-            from google import genai
-            client = genai.Client(api_key=settings.GEMINI_API_KEY)
             # Check for Veo video generation capability
             if hasattr(client.models, "generate_videos"):
                 operation = client.models.generate_videos(

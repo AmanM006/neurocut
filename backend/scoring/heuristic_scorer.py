@@ -26,18 +26,8 @@ class HeuristicScorer:
     """
 
     def __init__(self):
-        self.gemini_client = None
-        if settings.GEMINI_API_KEY:
-            try:
-                from google import genai
-                self.gemini_client = genai.Client(api_key=settings.GEMINI_API_KEY)
-            except Exception:
-                try:
-                    import google.generativeai as legacy_genai
-                    legacy_genai.configure(api_key=settings.GEMINI_API_KEY)
-                    self.gemini_client = legacy_genai.GenerativeModel(settings.GEMINI_MODEL)
-                except Exception:
-                    self.gemini_client = None
+        from backend.config import get_genai_client
+        self.gemini_client = get_genai_client()
 
     def score_timeline(self, state: TimelineState) -> List[TelemetryPoint]:
         """

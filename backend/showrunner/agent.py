@@ -17,13 +17,8 @@ class ShowrunnerAgent:
     """
 
     def __init__(self):
-        self.gemini_client = None
-        if settings.GEMINI_API_KEY:
-            try:
-                from google import genai
-                self.gemini_client = genai.Client(api_key=settings.GEMINI_API_KEY)
-            except Exception:
-                self.gemini_client = None
+        from backend.config import get_genai_client
+        self.gemini_client = get_genai_client()
 
     def diagnose_and_intervene(
         self,
