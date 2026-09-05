@@ -31,3 +31,7 @@ frontend/build/
 .vscode/
 .idea/
 *.swp
+
+# Reference downloads
+linear_reference/
+
