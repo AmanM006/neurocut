@@ -198,15 +198,9 @@ def get_training_progress():
         baseline_reward = float(baseline_res[0]["r"]) if baseline_res and baseline_res[0]["r"] is not None else 0.6730
 
         eval_res = clickhouse_client.query(
-            "SELECT max(reward) as r FROM default.edit_attempts WHERE episode_id = 'ppo_final_eval'"
+            "SELECT max(reward) as r FROM default.edit_attempts WHERE episode_id = 'ppo_final_eval' OR episode_id LIKE 'ppo_eval_%'"
         )
         eval_reward = float(eval_res[0]["r"]) if eval_res and eval_res[0]["r"] is not None else None
-        if eval_reward is None:
-            periodic_eval = clickhouse_client.query(
-                "SELECT max(reward) as r FROM default.edit_attempts WHERE episode_id LIKE 'ppo_eval_%'"
-            )
-            if periodic_eval and periodic_eval[0]["r"] is not None:
-                eval_reward = float(periodic_eval[0]["r"])
 
         best_so_far = float(rows[-1]["best_so_far"]) if rows else 0.0
         current_ep = int(rows[-1]["episode_num"]) if rows else 0
