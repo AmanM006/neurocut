@@ -23,6 +23,11 @@
   --foreground: #f7f8f8;
 }
 
+html {
+  background-color: #08090a;
+  color-scheme: dark;
+}
+
 body {
   color: var(--foreground);
   background: var(--background);
