@@ -71,7 +71,7 @@ export const SceneTable: React.FC<SceneTableProps> = ({
                     {c.take_id || "take_1"}
                   </td>
                   <td className="py-2.5 text-zinc-300">
-                    {c.duration_seconds.toFixed(1)}s
+                    {(typeof c?.duration_seconds === "number" ? c.duration_seconds : 4.0).toFixed(1)}s
                   </td>
                   <td className="py-2.5">
                     {isBroll ? (

@@ -53,7 +53,16 @@ export const PacingFunnelCard: React.FC<PacingFunnelCardProps> = ({
  { clip_id: "shot_05_climax", scene_id: "climax", take_id: "take_1", duration_seconds: 5.5, is_broll: false, description: "Climactic Breakthrough Action" },
  ];
 
- const totalDuration = steps.reduce((acc, s) => acc + s.duration_seconds, 0);
+  const getDuration = (s: any) =>
+    typeof s?.duration_seconds === "number" && !isNaN(s.duration_seconds)
+      ? s.duration_seconds
+      : typeof s?.duration === "number"
+      ? s.duration
+      : typeof s?.duration_frames === "number" && s?.fps
+      ? s.duration_frames / s.fps
+      : 4.0;
+
+  const totalDuration = steps.reduce((acc, s) => acc + getDuration(s), 0);
 
  return (
  <div className="bg-[#0c0c0e] border border-white/[0.08] rounded-3xl p-5 sm:p-7 flex flex-col justify-between shadow-2xl relative overflow-hidden group">
@@ -120,23 +129,6 @@ export const PacingFunnelCard: React.FC<PacingFunnelCardProps> = ({
  className={`rounded-2xl border p-3.5 flex flex-col justify-between transition-all duration-200 relative group/step ${
  isBottleneck
  ? "bg-gradient-to-b from-rose-950/40 via-[#0e0c0d] to-[#0c0c0e] border-rose-500/40 shadow-lg shadow-rose-950/20"
- : isBroll
- ? "bg-gradient-to-b from-indigo-950/30 via-[#0c0d12] to-[#0c0c0e] border-indigo-500/40 shadow-lg shadow-indigo-950/20"
- : "bg-white/[0.02] hover:bg-white/[0.04] border-white/[0.06] hover:border-white/[0.12]"
- }`}
- >
- {/* Step Header */}
- <div>
- <div className="flex items-center justify-between text-[10px] font-berkeley text-zinc-500 mb-1">
- <span className="uppercase tracking-wider">Step 0{idx + 1}</span>
- <span>{step.duration_seconds.toFixed(1)}s</span>
- </div>
- <div className="font-inter font-semibold text-xs text-white truncate" title={step.clip_id}>
- {step.clip_id.replace("shot_", "").replace("_dialogue", "")}
- </div>
- <div className="text-[10px] font-berkeley text-zinc-400 mt-0.5">
- {(attentionScore * 100).toFixed(0)}% Retention
- </div>
  </div>
 
  {/* 3D Striped Visual Funnel Column */}

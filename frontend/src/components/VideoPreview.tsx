@@ -35,7 +35,10 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({
  }
  }, [videoUrl]);
 
- const totalDuration = clips.reduce((acc, c) => acc + c.duration_seconds, 0);
+  const totalDuration = clips.reduce(
+    (acc, c) => acc + (typeof c?.duration_seconds === "number" ? c.duration_seconds : 4.0),
+    0
+  );
 
  return (
  <div className="bg-[#0c0c0e] border border-white/[0.07] rounded-2xl p-4 sm:p-5 flex flex-col h-full shadow-2xl relative overflow-hidden group">
