@@ -47,15 +47,29 @@ def generate_broll_clip(target_scene: str, prompt: str, style: str = "cinematic 
             # Check for Veo video generation capability
             if hasattr(client.models, "generate_videos"):
                 operation = client.models.generate_videos(
-                    model="veo-2.0-generate-001",
+                    model="veo-3.1-fast-generate-001",
                     prompt=f"{prompt}, {style}, cinematic 24fps 4k high contrast moody lighting",
                     config={"duration_seconds": 2, "aspect_ratio": "16:9"}
                 )
-                # If synchronous or completed
-                if hasattr(operation, "video"):
+                # Poll long-running operation if in progress
+                import time
+                for _ in range(10):
+                    if getattr(operation, "done", False):
+                        break
+                    time.sleep(3)
+                    operation = client.operations.get(operation=operation)
+
+                if hasattr(operation, "video") and operation.video:
                     with open(output_path, "wb") as f:
                         f.write(operation.video.bytes)
                     generated_via_api = True
+                elif hasattr(operation, "response") and operation.response and getattr(operation.response, "generated_videos", None):
+                    gv = operation.response.generated_videos[0]
+                    video_bytes = getattr(gv.video, "video_bytes", None) or getattr(gv.video, "bytes", None)
+                    if video_bytes:
+                        with open(output_path, "wb") as f:
+                            f.write(video_bytes)
+                        generated_via_api = True
         except Exception as e:
             print(f"[Showrunner Tool] Veo API generation fallback to procedural synthesis: {e}")
 
