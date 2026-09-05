@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Table, CheckCircle, AlertTriangle, Film, Sparkles } from "lucide-react";
 
 interface Clip {
@@ -23,38 +23,62 @@ export const SceneTable: React.FC<SceneTableProps> = ({
   worstClipId,
   reward
 }) => {
+  const [activeTab, setActiveTab] = useState<"scenes" | "durations" | "flow">("scenes");
+
   return (
-    <div className="bg-[#0c0c0e] border border-white/[0.07] rounded-2xl p-4 flex flex-col h-full shadow-2xl">
-      {/* Header */}
-      <div className="flex items-center justify-between pb-3 border-b border-white/[0.06] mb-3">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-lg bg-white/[0.03] text-zinc-300 border border-white/[0.08]">
-            <Table className="w-3.5 h-3.5" />
-          </div>
-          <div>
-            <h3 className="text-xs font-semibold text-zinc-100 tracking-tight">
-              Scene-by-Scene Pacing Telemetry
-            </h3>
-            <p className="text-[10px] text-zinc-500 font-mono">
-              ClickHouse Frame Ingestion & Pacing Analysis
-            </p>
+    <div className="bg-[#0c0d0e] border border-white/[0.08] rounded-2xl p-5 flex flex-col h-full shadow-2xl font-inter">
+      {/* Header - Vercel Analytics Style */}
+      <div className="flex items-center justify-between pb-3.5 border-b border-white/[0.06] mb-3">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 bg-[#060709] border border-white/[0.08] rounded-lg p-0.5 text-xs">
+            <button
+              onClick={() => setActiveTab("scenes")}
+              className={`px-3 py-1 rounded-md font-medium transition-all ${
+                activeTab === "scenes"
+                  ? "bg-white/[0.12] text-white shadow-sm"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              Scenes
+            </button>
+            <button
+              onClick={() => setActiveTab("durations")}
+              className={`px-3 py-1 rounded-md font-medium transition-all ${
+                activeTab === "durations"
+                  ? "bg-white/[0.12] text-white shadow-sm"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              Durations
+            </button>
+            <button
+              onClick={() => setActiveTab("flow")}
+              className={`px-3 py-1 rounded-md font-medium transition-all ${
+                activeTab === "flow"
+                  ? "bg-white/[0.12] text-white shadow-sm"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              Audience Flow
+            </button>
           </div>
         </div>
-        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-white/[0.03] text-zinc-400 border border-white/[0.08]">
+
+        <span className="text-xs text-zinc-400 font-medium">
           {clips.length} Active Shots
         </span>
       </div>
 
       {/* Table */}
       <div className="flex-1 overflow-x-auto">
-        <table className="w-full text-left text-[11px] font-mono">
+        <table className="w-full text-left text-xs">
           <thead>
-            <tr className="border-b border-white/[0.04] text-zinc-500 text-[10px] uppercase tracking-wider">
-              <th className="pb-2 font-medium">Shot / Scene</th>
-              <th className="pb-2 font-medium">Take</th>
-              <th className="pb-2 font-medium">Runtime</th>
-              <th className="pb-2 font-medium">Type</th>
-              <th className="pb-2 font-medium text-right">Pacing Status</th>
+            <tr className="border-b border-white/[0.04] text-zinc-400 text-xs">
+              <th className="pb-2.5 font-medium">Shot / Scene</th>
+              <th className="pb-2.5 font-medium">Take</th>
+              <th className="pb-2.5 font-medium">Runtime</th>
+              <th className="pb-2.5 font-medium">Type</th>
+              <th className="pb-2.5 font-medium text-right">Pacing Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/[0.03]">
@@ -63,35 +87,35 @@ export const SceneTable: React.FC<SceneTableProps> = ({
               const isBroll = c.is_broll;
               return (
                 <tr key={`${c.clip_id}-${idx}`} className="hover:bg-white/[0.02] transition-colors">
-                  <td className="py-2.5 font-medium text-zinc-200 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
-                    <span className="truncate max-w-[140px]">{c.clip_id}</span>
+                  <td className="py-3 font-medium text-zinc-200 flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                    <span className="truncate max-w-[160px] font-mono text-xs">{c.clip_id}</span>
                   </td>
-                  <td className="py-2.5 text-zinc-400">
+                  <td className="py-3 text-zinc-400 font-mono text-xs">
                     {c.take_id || "take_1"}
                   </td>
-                  <td className="py-2.5 text-zinc-300">
+                  <td className="py-3 text-zinc-300 font-mono text-xs">
                     {(typeof c?.duration_seconds === "number" ? c.duration_seconds : 4.0).toFixed(1)}s
                   </td>
-                  <td className="py-2.5">
+                  <td className="py-3">
                     {isBroll ? (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] bg-purple-500/15 text-purple-300 border border-purple-500/30">
-                        <Sparkles className="w-2.5 h-2.5" /> B-Roll
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                        <Sparkles className="w-3 h-3" /> Veo B-Roll
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] bg-zinc-800 text-zinc-300 border border-white/[0.05]">
-                        <Film className="w-2.5 h-2.5" /> Narrative
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-white/[0.04] text-zinc-300 border border-white/[0.08]">
+                        <Film className="w-3 h-3" /> Narrative
                       </span>
                     )}
                   </td>
-                  <td className="py-2.5 text-right">
+                  <td className="py-3 text-right">
                     {isBottleneck ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-rose-500/15 text-rose-300 border border-rose-500/30">
-                        <AlertTriangle className="w-2.5 h-2.5" /> Bottleneck
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                        <AlertTriangle className="w-3 h-3" /> Bottleneck
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        <CheckCircle className="w-2.5 h-2.5" /> High Flow
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <CheckCircle className="w-3 h-3" /> High Flow
                       </span>
                     )}
                   </td>
