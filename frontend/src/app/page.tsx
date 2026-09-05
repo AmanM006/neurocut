@@ -1,12 +1,16 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { Sidebar } from "@/components/Sidebar";
 import { Controls } from "@/components/Controls";
+import { KpiHeader } from "@/components/KpiHeader";
 import { VideoPreview } from "@/components/VideoPreview";
 import { TelemetryChart } from "@/components/TelemetryChart";
 import { ShowrunnerLog, LogEntry } from "@/components/ShowrunnerLog";
+import { SceneTable } from "@/components/SceneTable";
 import { TrainingProgress } from "@/components/TrainingProgress";
 import { LenisProvider } from "@/components/LenisProvider";
+import { Activity, BrainCircuit } from "lucide-react";
 
 export default function Home() {
   const [episodeId, setEpisodeId] = useState<string>("ep_main");
@@ -25,6 +29,7 @@ export default function Home() {
   const [comparisonData, setComparisonData] = useState<any[]>([]);
   const [optimizerMode, setOptimizerMode] = useState<"beam_search" | "ppo">("beam_search");
   const [panelBTab, setPanelBTab] = useState<"telemetry" | "training">("telemetry");
+  const [activeSidebarTab, setActiveSidebarTab] = useState<string>("monitor");
 
   const addLog = useCallback((type: LogEntry["type"], title: string, details?: string, r?: number) => {
     const newEntry: LogEntry = {
@@ -259,7 +264,7 @@ export default function Home() {
     }
   };
 
-  // Phase 2: Run Qwen 2.5-VL Audience Swarm (2 FPS)
+  // Run Qwen 2.5-VL Audience Swarm
   const handleRunSwarm = async () => {
     if (isRunning) return;
     try {
@@ -288,92 +293,139 @@ export default function Home() {
     refreshTelemetry(episodeId, src);
   };
 
+  const totalDuration = clips.reduce((acc, c) => acc + c.duration_seconds, 0);
+
   return (
     <LenisProvider>
-      <main className="min-h-screen bg-[#000000] flex flex-col text-zinc-100 selection:bg-amber-400 selection:text-black">
-        <Controls
-          isRunning={isRunning}
-          onRunOptimization={handleRunOptimization}
-          onStepOptimization={handleStepOptimization}
-          onRunSwarm={handleRunSwarm}
-          onForceIntervention={handleForceIntervention}
-          onResetEpisode={initEpisode}
-          episodeId={episodeId}
+      <div className="min-h-screen bg-[#08080a] flex text-zinc-100 selection:bg-amber-400 selection:text-black">
+        {/* Left Mini-Sidebar (Linear / CMSolutions Style) */}
+        <Sidebar
+          activeTab={activeSidebarTab}
+          onSelectTab={(tab) => {
+            setActiveSidebarTab(tab);
+            if (tab === "curves") setPanelBTab("telemetry");
+            if (tab === "training") setPanelBTab("training");
+          }}
           clickhouseMode={clickhouseMode}
-          optimizerMode={optimizerMode}
-          onToggleOptimizer={setOptimizerMode}
         />
 
-        <div className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-5">
-          {/* Left Column: Panel A (Preview) & Panel B (Telemetry) */}
-          <div className="lg:col-span-7 flex flex-col gap-5">
-            <div className="flex-1">
-              <VideoPreview
-                videoUrl={videoUrl}
-                clips={clips}
-                attemptN={attemptN}
-                reward={reward}
-                worstClipId={worstClipId}
-              />
-            </div>
+        {/* Main Content Area */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Raycast-style Top Command Bar */}
+          <Controls
+            isRunning={isRunning}
+            onRunOptimization={handleRunOptimization}
+            onStepOptimization={handleStepOptimization}
+            onRunSwarm={handleRunSwarm}
+            onForceIntervention={handleForceIntervention}
+            onResetEpisode={initEpisode}
+            episodeId={episodeId}
+            clickhouseMode={clickhouseMode}
+            optimizerMode={optimizerMode}
+            onToggleOptimizer={setOptimizerMode}
+          />
 
-            {/* Tab Switcher for Panel B / Panel D */}
-            <div className="flex items-center justify-between bg-[#080808] p-1.5 rounded-xl border border-white/5 text-xs font-mono shadow-2xl">
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setPanelBTab("telemetry")}
-                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg font-medium transition-all duration-200 ${
-                    panelBTab === "telemetry"
-                      ? "bg-cyan-500/15 text-cyan-300 font-semibold border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.15)]"
-                      : "text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]"
-                  }`}
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full ${panelBTab === "telemetry" ? "bg-cyan-400 animate-pulse" : "bg-zinc-600"}`} />
-                  <span>Panel B: Audience Retention Curves</span>
-                </button>
-                <button
-                  onClick={() => setPanelBTab("training")}
-                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg font-medium transition-all duration-200 ${
-                    panelBTab === "training"
-                      ? "bg-amber-500/15 text-amber-300 font-semibold border border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
-                      : "text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]"
-                  }`}
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full ${panelBTab === "training" ? "bg-amber-400 animate-pulse" : "bg-zinc-600"}`} />
-                  <span>Panel D: PPO Policy Training (5k Eps)</span>
-                </button>
-              </div>
-              <div className="hidden sm:flex items-center gap-2 text-[10px] text-zinc-500 pr-2">
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.4)]" />
-                <span>Cloud Telemetry Active</span>
-              </div>
-            </div>
+          {/* Bento Grid Workspace Container */}
+          <main className="flex-1 max-w-[1680px] w-full mx-auto p-4 sm:p-6 flex flex-col">
+            {/* Top 4 Bento KPI Metric Cards */}
+            <KpiHeader
+              reward={reward}
+              meanAttention={meanAttention}
+              worstDrop={worstDrop}
+              worstClipId={worstClipId}
+              duration={totalDuration}
+              sceneCount={clips.length}
+              clickhouseMode={clickhouseMode}
+              optimizerMode={optimizerMode}
+            />
 
-            <div className="flex-1">
-              {panelBTab === "telemetry" ? (
-                <TelemetryChart
-                  series={series}
+            {/* Central Bento Stage: Video Monitor + Analytics/PPO Curves */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-4">
+              {/* Left Bento: Cinema Preview & Timeline Track */}
+              <div className="lg:col-span-7 flex flex-col">
+                <VideoPreview
+                  videoUrl={videoUrl}
+                  clips={clips}
+                  attemptN={attemptN}
                   reward={reward}
-                  meanAttention={meanAttention}
-                  worstDrop={worstDrop}
                   worstClipId={worstClipId}
-                  clickhouseMode={clickhouseMode}
-                  selectedSource={selectedSource}
-                  onSelectSource={handleSelectSource}
-                  comparisonData={comparisonData}
                 />
-              ) : (
-                <TrainingProgress />
-              )}
-            </div>
-          </div>
+              </div>
 
-          {/* Right Column: Panel C (Showrunner Log) */}
-          <div className="lg:col-span-5 flex flex-col">
-            <ShowrunnerLog logs={logs} />
-          </div>
+              {/* Right Bento: Telemetry Curves or PPO Policy Training */}
+              <div className="lg:col-span-5 flex flex-col gap-3">
+                {/* Segmented Tab Switcher for Curves vs PPO 5K */}
+                <div className="flex items-center justify-between bg-[#0c0c0e] p-1.5 rounded-2xl border border-white/[0.07] text-xs font-mono shadow-md">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setPanelBTab("telemetry")}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-medium transition-all duration-150 ${
+                        panelBTab === "telemetry"
+                          ? "bg-white/[0.1] text-white font-semibold border border-white/[0.12] shadow-sm"
+                          : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03]"
+                      }`}
+                    >
+                      <Activity className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Audience Retention Curves</span>
+                    </button>
+                    <button
+                      onClick={() => setPanelBTab("training")}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-medium transition-all duration-150 ${
+                        panelBTab === "training"
+                          ? "bg-white/[0.1] text-white font-semibold border border-white/[0.12] shadow-sm"
+                          : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03]"
+                      }`}
+                    >
+                      <BrainCircuit className="w-3.5 h-3.5 text-amber-400" />
+                      <span>PPO Training (5k Eps)</span>
+                    </button>
+                  </div>
+                  <div className="hidden sm:flex items-center gap-1.5 text-[10px] text-zinc-500 pr-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>Live Oracle</span>
+                  </div>
+                </div>
+
+                {/* Tab Body */}
+                <div className="flex-1 min-h-[360px]">
+                  {panelBTab === "telemetry" ? (
+                    <TelemetryChart
+                      series={series}
+                      reward={reward}
+                      meanAttention={meanAttention}
+                      worstDrop={worstDrop}
+                      worstClipId={worstClipId}
+                      clickhouseMode={clickhouseMode}
+                      selectedSource={selectedSource}
+                      onSelectSource={handleSelectSource}
+                      comparisonData={comparisonData}
+                    />
+                  ) : (
+                    <TrainingProgress />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Bento Stage: Showrunner Decision Stream + Scene Telemetry Table */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1">
+              {/* Left Bottom Bento: Showrunner Stream */}
+              <div className="lg:col-span-6 flex flex-col min-h-[380px]">
+                <ShowrunnerLog logs={logs} />
+              </div>
+
+              {/* Right Bottom Bento: Scene-by-Scene Pacing Telemetry Table */}
+              <div className="lg:col-span-6 flex flex-col min-h-[380px]">
+                <SceneTable
+                  clips={clips}
+                  worstClipId={worstClipId}
+                  reward={reward}
+                />
+              </div>
+            </div>
+          </main>
         </div>
-      </main>
+      </div>
     </LenisProvider>
   );
 }
