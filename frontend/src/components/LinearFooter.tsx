@@ -10,14 +10,14 @@ export const LinearFooter: React.FC = () => {
  <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-6">
  <div className="flex items-center gap-3">
  <div className="w-6 h-6 rounded-md bg-white/[0.08] border border-white/[0.1] flex items-center justify-center">
- <span className="font-berkeley font-bold text-[10px] text-indigo-400">NC</span>
+ <span className="font-mono font-bold text-[10px] text-indigo-400">NC</span>
  </div>
  <span className="text-zinc-400 font-medium">NEURO-CUT</span>
  <span className="text-zinc-700">•</span>
  <span>Google Cloud Agentic Cinema Hackathon</span>
  </div>
 
- <div className="flex items-center gap-6 font-berkeley text-[11px] text-zinc-400">
+ <div className="flex items-center gap-6 font-mono text-[11px] text-zinc-400">
  <Link href="/studio" className="hover:text-white transition-colors">
  Studio
  </Link>
