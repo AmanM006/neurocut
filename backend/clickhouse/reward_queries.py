@@ -1,4 +1,5 @@
 import json
+import time
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel
 
@@ -86,6 +87,12 @@ def compute_clickhouse_reward(episode_id: str, attempt_n: Optional[int] = None) 
     """
 
     rows = clickhouse_client.query(ch_query, sqlite_sql=sqlite_query, params={"episode_id": episode_id, "attempt_n": attempt_n})
+    if not rows and attempt_n is not None:
+        for _ in range(2):
+            time.sleep(0.25)
+            rows = clickhouse_client.query(ch_query, sqlite_sql=sqlite_query, params={"episode_id": episode_id, "attempt_n": attempt_n})
+            if rows:
+                break
 
     if not rows:
         return RewardMetrics(

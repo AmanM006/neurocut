@@ -422,13 +422,16 @@ class PPOAgent:
             delta_r = (new_reward - prev_reward) * 10.0
             step_reward = delta_r
 
-            if new_reward > prev_reward:
+            if new_reward > prev_reward + 1e-4:
                 step_reward += 0.30
                 if verdict != "showrunner_intervened":
                     verdict = "improved"
-            else:
+            elif new_reward < prev_reward - 1e-4:
                 step_reward -= 0.20
                 verdict = "regressed"
+            else:
+                step_reward -= 0.05
+                verdict = "plateau"
 
             # Always transition environment state to the applied edit
             self.env.state = new_state
