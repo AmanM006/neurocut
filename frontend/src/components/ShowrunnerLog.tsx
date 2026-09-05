@@ -18,11 +18,13 @@ interface ShowrunnerLogProps {
 }
 
 export const ShowrunnerLog: React.FC<ShowrunnerLogProps> = ({ logs }) => {
- const bottomRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
- useEffect(() => {
- bottomRef.current?.scrollIntoView({ behavior: "smooth" });
- }, [logs]);
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    }
+  }, [logs]);
 
  return (
  <div className="bg-[#0c0c0e] border border-white/[0.07] rounded-2xl p-4 sm:p-5 flex flex-col h-full shadow-2xl relative overflow-hidden">
@@ -52,7 +54,7 @@ export const ShowrunnerLog: React.FC<ShowrunnerLogProps> = ({ logs }) => {
  </div>
 
  {/* Scrolling Stream Area */}
- <div className="flex-1 overflow-y-auto space-y-2 pr-1 font-mono text-xs max-h-[420px]">
+ <div ref={containerRef} className="flex-1 overflow-y-auto space-y-2 pr-1 font-mono text-xs max-h-[420px]">
  {logs.map((log) => {
  if (log.type === "intervention") {
  return (
@@ -126,7 +128,6 @@ export const ShowrunnerLog: React.FC<ShowrunnerLogProps> = ({ logs }) => {
  </div>
  );
  })}
- <div ref={bottomRef} />
  </div>
  </div>
  );

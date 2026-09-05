@@ -6,6 +6,7 @@ import { Database, Activity, Sparkles, Cpu, Layers, Terminal, ArrowUpRight, Film
 export const LinearFeatures: React.FC = () => {
  const features = [
  {
+ id: "retention",
  num: "01",
  tag: "REAL-TIME ORACLE",
  title: "ClickHouse Cloud 50ms Retention Engine",
@@ -16,6 +17,7 @@ export const LinearFeatures: React.FC = () => {
  stats: "8.2ms P99 Latency • asia-southeast1 GCP"
  },
  {
+ id: "swarm",
  num: "02",
  tag: "MULTIMODAL SWARM",
  title: "Qwen 2.5-VL 3B Audience Vision Swarm",
@@ -26,6 +28,7 @@ export const LinearFeatures: React.FC = () => {
  stats: "4 Personas • 2 FPS Continuous Stream"
  },
  {
+ id: "showrunner",
  num: "03",
  tag: "DIRECTORIAL AGENT",
  title: "Google ADK Showrunner Supervisor",
@@ -36,6 +39,7 @@ export const LinearFeatures: React.FC = () => {
  stats: "Veo 3.1 • Zero Story Collapse"
  },
  {
+ id: "ppo",
  num: "04",
  tag: "POLICY GRADIENT",
  title: "40-Action Actor-Critic PPO Policy",
@@ -48,7 +52,7 @@ export const LinearFeatures: React.FC = () => {
  ];
 
  return (
- <section id="features" className="py-20 md:py-28 border-t border-white/[0.06] relative">
+ <section id="architecture" className="py-20 md:py-28 border-t border-white/[0.06] relative">
  <div className="max-w-6xl mx-auto px-6">
  {/* Section Header */}
  <div className="flex flex-col items-center text-center mb-16">
@@ -69,10 +73,11 @@ export const LinearFeatures: React.FC = () => {
  const Icon = feat.icon;
  let iconColor = "text-cyan-400 bg-cyan-500/10 border-cyan-500/20";
  if (feat.accent === "purple") iconColor = "text-purple-400 bg-purple-500/10 border-purple-500/20";
- if (feat.accent === "amber") iconColor = "text-indigo-400 bg-indigo-500/10 border-indigo-500/20";
+ if (feat.accent === "indigo") iconColor = "text-indigo-400 bg-indigo-500/10 border-indigo-500/20";
  return (
  <div
  key={feat.num}
+ id={feat.id}
  className="bg-[#0b0c0e] border border-white/[0.07] rounded-2xl p-6 flex flex-col justify-between group hover:border-white/[0.14] transition-all duration-200 shadow-lg"
  >
  <div>
