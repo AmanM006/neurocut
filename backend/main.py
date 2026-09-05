@@ -1,6 +1,7 @@
 import json
 import os
 import asyncio
+import time
 import threading
 from pathlib import Path
 from typing import Dict, Any, Optional, List
@@ -162,12 +163,20 @@ def train_ppo(episode_id: str, steps: int = Query(default=3, ge=1, le=10)):
         "latest_step": step_history[-1] if step_history else None
     }
 
+_progress_cache = {"data": None, "timestamp": 0.0}
+
 @app.get("/api/training/progress")
 def get_training_progress():
     """
     Returns live training progress for PPO reinforcement learning curve,
     computed directly via ClickHouse window functions.
+    Cached in-memory with 10s TTL and downsampled to 200 points for instant 60fps rendering.
     """
+    global _progress_cache
+    now = time.time()
+    if _progress_cache["data"] is not None and (now - _progress_cache["timestamp"]) < 10.0:
+        return _progress_cache["data"]
+
     try:
         q = """
         SELECT
@@ -205,12 +214,25 @@ def get_training_progress():
         best_so_far = float(rows[-1]["best_so_far"]) if rows else 0.0
         current_ep = int(rows[-1]["episode_num"]) if rows else 0
 
-        return {
+        # Downsample rows to ~200 points for instant 60 FPS SVG rendering
+        if len(rows) > 200:
+            step = len(rows) / 199.0
+            indices = set(int(round(i * step)) for i in range(199))
+            indices.add(len(rows) - 1)
+            # Guarantee the peak exploration episode is preserved
+            max_idx = max(range(len(rows)), key=lambda i: float(rows[i]["reward"]))
+            indices.add(max_idx)
+            sampled_rows = [rows[i] for i in sorted(indices)]
+        else:
+            sampled_rows = rows
+
+        result = {
             "status": "training" if is_training_active else "idle",
             "current_episode": current_ep,
             "baseline_reward": baseline_reward,
             "eval_reward": eval_reward,
             "best_so_far": best_so_far,
+            "total_episodes_recorded": len(rows),
             "points": [
                 {
                     "episode": int(r["episode_num"]),
@@ -218,9 +240,11 @@ def get_training_progress():
                     "rolling_avg": round(float(r["rolling_avg_reward"]), 4),
                     "best_so_far": round(float(r["best_so_far"]), 4)
                 }
-                for r in rows
+                for r in sampled_rows
             ]
         }
+        _progress_cache = {"data": result, "timestamp": now}
+        return result
     except Exception as e:
         return {
             "status": "error",
