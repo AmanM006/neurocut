@@ -181,113 +181,93 @@ export const TrainingProgress: React.FC = () => {
         <div className="bg-[#0a0a0e] border border-amber-500/30 rounded-xl p-3 mb-3 text-xs font-mono text-white/80 space-y-2 animate-fadeIn">
           <div className="flex items-center gap-1.5 text-amber-400 font-bold">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Architectural Roles: Ground-Truth Baseline vs Neural Policy</span>
+            <span>RL Insight: Goodhart&apos;s Law in Autonomous Video Editing</span>
           </div>
           <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
             <div className="bg-black/60 p-2.5 rounded-lg border border-blue-500/20">
               <span className="text-blue-400 font-bold block mb-1 flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3" /> Phase 1: Beam Search Baseline
+                <CheckCircle2 className="w-3 h-3" /> Phase 1: Beam Search + Showrunner (Production Winner)
               </span>
               <p className="text-white/50 leading-relaxed">
-                Deterministic graph-search standard delivering guaranteed <strong className="text-blue-300">0.6730</strong> retention reward. Production fallback that runs anywhere without GPU.
+                Preserves full 22.0s dramatic arc across all 5 scenes (<strong className="text-blue-300">0.6730</strong> reward). When the standoff bottleneck dragged, the Showrunner Agent synthesized creative B-roll cutaways to sustain audience retention without hollowing out the story.
               </p>
             </div>
-            <div className="bg-black/60 p-2.5 rounded-lg border border-emerald-500/20">
-              <span className="text-emerald-400 font-bold block mb-1 flex items-center gap-1">
-                <Crown className="w-3 h-3" /> Phase 3: PPO Neural Policy
+            <div className="bg-black/60 p-2.5 rounded-lg border border-amber-500/20">
+              <span className="text-amber-400 font-bold block mb-1 flex items-center gap-1">
+                <BrainCircuit className="w-3 h-3" /> Phase 3: Unconstrained PPO (Reward Hacking Finding)
               </span>
               <p className="text-white/50 leading-relaxed">
-                Self-optimizing Actor-Critic trained over ClickHouse audience retention windows. Officially beat baseline reaching <strong className="text-emerald-300">0.7301</strong> (+8.48%) frozen evaluation.
+                Trivially maximized arithmetic mean attention to <strong className="text-emerald-300">0.7301</strong> (+8.5%) by deleting 60% of the film (8.5s 2-shot cut). Demonstrates why autonomous editing cannot rely on pure RL alone: Google ADK Showrunner oversight is essential to enforce narrative continuity.
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Current Champion Banner */}
-      <div className={`rounded-xl border p-3 mb-3 transition-all duration-200 ${
-        isPPOChampion
-          ? "bg-emerald-950/20 border-emerald-500/40 shadow-lg shadow-emerald-950/40"
-          : "bg-black/60 border-white/[0.08] shadow-md"
-      }`}>
+      {/* Current Champion & Alignment Insight Banner */}
+      <div className="rounded-xl border border-white/[0.08] bg-black/60 p-3 mb-3 shadow-xl">
         <div className="flex items-center justify-between border-b border-white/[0.06] pb-2 mb-2.5">
           <div className="flex items-center gap-2">
-            <div className={`p-1.5 rounded-lg ${isPPOChampion ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-blue-500/20 text-blue-400 border border-blue-500/30"}`}>
-              {isPPOChampion ? <Crown className="w-4 h-4" /> : <Award className="w-4 h-4" />}
+            <div className="p-1.5 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30">
+              <Award className="w-4 h-4" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold font-mono uppercase tracking-wide text-white/80">
-                  Current Production Champion:
+                  Production Film Winner:
                 </span>
-                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono tracking-wider ${
-                  isPPOChampion
-                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                    : "bg-blue-500/20 text-blue-300 border border-blue-500/40"
-                }`}>
-                  {isPPOChampion ? "👑 PPO NEURAL POLICY" : "🛡️ BEAM SEARCH BASELINE"}
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono tracking-wider bg-blue-500/20 text-blue-300 border border-blue-500/40">
+                  🛡️ BEAM SEARCH + SHOWRUNNER (22.0s)
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-mono bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                  ⚡ PPO: REWARD-HACKING INSIGHT
                 </span>
               </div>
             </div>
           </div>
           <span className="text-[10px] font-mono text-white/40">
-            Ground-Truth: ClickHouse Cloud
+            Telemetry: ClickHouse Cloud
           </span>
         </div>
 
         {/* Head-to-Head Stats Grid */}
         <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-          {/* Baseline Side */}
-          <div className="bg-[#08080a] rounded-lg p-2.5 border border-white/[0.06] flex items-center justify-between">
+          {/* Baseline Production Cut */}
+          <div className="bg-[#08080a] rounded-lg p-2.5 border border-blue-500/30 flex items-center justify-between">
             <div>
               <div className="flex items-center gap-1.5 text-[10px] text-blue-400 font-semibold uppercase">
-                <CheckCircle2 className="w-3 h-3" /> Phase 1 Beam Search
+                <CheckCircle2 className="w-3 h-3" /> Phase 1: Production Executive Cut
               </div>
-              <div className="text-sm font-bold text-white mt-1">
-                {baselineReward.toFixed(4)}
+              <div className="text-sm font-bold text-white mt-1 flex items-baseline gap-2">
+                <span>{baselineReward.toFixed(4)}</span>
+                <span className="text-[10px] text-blue-300/80 font-normal">22.0s • 5 Scenes</span>
               </div>
-              <span className="text-[10px] text-white/40">Deterministic Standard</span>
+              <p className="text-[10px] text-white/50 mt-0.5 leading-snug">
+                Full narrative intact + Showrunner B-roll injection resolving standoff bottleneck.
+              </p>
             </div>
-            {!isPPOChampion && (
-              <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                ACTIVE CHAMPION
-              </span>
-            )}
+            <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30 shrink-0 ml-2">
+              BEST FILM
+            </span>
           </div>
 
-          {/* PPO Side */}
-          <div className={`bg-[#08080a] rounded-lg p-2.5 border flex items-center justify-between ${
-            isPPOChampion ? "border-emerald-500/40 bg-emerald-950/10" : "border-white/[0.06]"
-          }`}>
+          {/* PPO Neural Exploration */}
+          <div className="bg-[#08080a] rounded-lg p-2.5 border border-amber-500/30 flex items-center justify-between">
             <div>
               <div className="flex items-center gap-1.5 text-[10px] text-amber-400 font-semibold uppercase">
-                <BrainCircuit className="w-3 h-3" /> Phase 3 PPO Policy
+                <BrainCircuit className="w-3 h-3" /> Phase 3: PPO Neural Policy
               </div>
-              <div className="text-sm font-bold mt-1 flex items-center gap-2">
-                <span className={ppoPeakBeatsBaseline ? "text-emerald-400" : "text-white"}>
-                  {bestSoFar.toFixed(4)}
-                </span>
-                <span className="text-[10px] text-white/40 font-normal">
-                  (Peak) {evalReward !== null ? `| Eval: ${evalReward.toFixed(4)}` : ""}
-                </span>
+              <div className="text-sm font-bold text-white mt-1 flex items-baseline gap-2">
+                <span className="text-emerald-400">{evalReward !== null ? evalReward.toFixed(4) : bestSoFar.toFixed(4)}</span>
+                <span className="text-[10px] text-amber-300/80 font-normal">8.5s • 2 Scenes</span>
               </div>
-              <span className="text-[10px] text-emerald-400/80">
-                {isPPOChampion
-                  ? `+${(((evalReward! - baselineReward) / baselineReward) * 100).toFixed(1)}% verified over baseline`
-                  : ppoPeakBeatsBaseline
-                  ? `+${(((bestSoFar - baselineReward) / baselineReward) * 100).toFixed(1)}% peak exploration delta`
-                  : "Curriculum training in progress"}
-              </span>
+              <p className="text-[10px] text-white/50 mt-0.5 leading-snug">
+                <strong className="text-amber-300">Goodhart's Law:</strong> Policy pruned setup scenes to maximize mean engagement (+8.5%).
+              </p>
             </div>
-            {isPPOChampion ? (
-              <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm">
-                ACTIVE CHAMPION
-              </span>
-            ) : ppoPeakBeatsBaseline ? (
-              <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                PEAK AHEAD
-              </span>
-            ) : null}
+            <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0 ml-2">
+              PEAK SCALAR
+            </span>
           </div>
         </div>
       </div>
