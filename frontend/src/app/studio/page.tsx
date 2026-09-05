@@ -112,9 +112,13 @@ export default function StudioPage() {
  }
  }, [addLog, refreshTelemetry]);
 
- useEffect(() => {
- initEpisode();
- }, [initEpisode]);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
+  useEffect(() => {
+    initEpisode();
+  }, [initEpisode]);
 
  // Run full optimization loop via SSE Stream
  const handleRunOptimization = () => {
@@ -317,9 +321,25 @@ export default function StudioPage() {
  </Link>
 
  <div className="flex items-center gap-2">
- <div className="w-7 h-7 rounded-lg bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center font-berkeley font-bold text-xs text-indigo-400">
- NC
- </div>
+ <div className="w-7 h-7 rounded-lg bg-[#121316] border border-white/[0.1] flex items-center justify-center">
+                <svg
+                  className="w-3.5 h-3.5 text-indigo-400"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="14.31" y1="8" x2="20.05" y2="17.94" />
+                  <line x1="9.69" y1="8" x2="21.17" y2="8" />
+                  <line x1="7.38" y1="12" x2="13.12" y2="2.06" />
+                  <line x1="9.69" y1="16" x2="3.95" y2="6.06" />
+                  <line x1="14.31" y1="16" x2="2.83" y2="16" />
+                  <line x1="16.62" y1="12" x2="10.88" y2="21.94" />
+                </svg>
+              </div>
  <span className="font-inter font-bold text-sm tracking-tight text-white">
  STUDIO
  </span>

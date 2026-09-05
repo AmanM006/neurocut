@@ -26,6 +26,11 @@
 html {
   background-color: #08090a;
   color-scheme: dark;
+  scroll-behavior: smooth;
+}
+
+[id] {
+  scroll-margin-top: 5.5rem;
 }
 
 body {
