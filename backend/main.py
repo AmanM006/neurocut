@@ -109,6 +109,31 @@ def create_episode(req: CreateEpisodeRequest):
         "video_url": f"/api/episodes/{episode_id}/video?t={os.urandom(2).hex()}"
     }
 
+@app.post("/api/episodes/{episode_id}/reset")
+def reset_episode(episode_id: str):
+    # Re-instantiate fresh editing environment and optimizer
+    env = EditingEnvironment(episode_id=episode_id)
+    optimizer = BeamSearchOptimizer(env)
+    state, metrics = optimizer.evaluate_state(env.state)
+    env.state = state
+
+    active_environments[episode_id] = env
+    active_optimizers[episode_id] = optimizer
+    if episode_id in active_ppo_agents:
+        del active_ppo_agents[episode_id]
+
+    return {
+        "episode_id": episode_id,
+        "status": "reset",
+        "attempt_n": state.attempt_n,
+        "clips": [c.model_dump() for c in state.clips],
+        "reward": metrics.scalar_reward,
+        "mean_attention": metrics.mean_attention,
+        "worst_clip_id": metrics.worst_clip_id,
+        "worst_drop": metrics.worst_drop,
+        "video_url": f"/api/episodes/{episode_id}/video?t={os.urandom(2).hex()}"
+    }
+
 @app.get("/api/episodes/{episode_id}")
 def get_episode(episode_id: str):
     env = active_environments.get(episode_id)

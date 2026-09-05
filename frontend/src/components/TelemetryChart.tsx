@@ -17,6 +17,8 @@ interface TelemetryPoint {
   t_ms: number;
   clip_id: string;
   attention: number;
+  oracle_attention?: number;
+  swarm_attention?: number;
   cognitive_load: number;
   arousal: number;
   source: string;
@@ -58,6 +60,8 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
     time: `${(p.t_ms / 1000).toFixed(1)}s`,
     rawTime: p.t_ms,
     Attention: p.attention,
+    OracleAttention: p.oracle_attention !== undefined ? p.oracle_attention : p.attention,
+    SwarmAttention: p.swarm_attention !== undefined ? p.swarm_attention : p.attention,
     Arousal: p.arousal,
     CognitiveLoad: p.cognitive_load,
     clip: p.clip_id,
@@ -66,7 +70,7 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
 
   return (
     <div className="bg-[#050505] border border-[#1a1a1a] rounded-xl p-5 flex flex-col justify-between h-full font-inter">
-      {/* Top Header Bar - Clean Single Line with zero wrapping */}
+      {/* Top Header Bar - Clean Single Line with zero text wrapping */}
       <div className="flex items-center justify-between pb-3.5 border-b border-[#1a1a1a] mb-4 gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shrink-0">
@@ -87,7 +91,7 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
           </div>
         </div>
 
-        {/* Compact Segmented Pills - Never overflows */}
+        {/* Compact Segmented Pills */}
         {onSelectSource && (
           <div className="flex items-center bg-[#0a0a0a] border border-[#222222] rounded-lg p-0.5 text-xs shrink-0">
             <button
@@ -98,7 +102,7 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
                   : "text-zinc-400 hover:text-white"
               }`}
             >
-              All
+              All Sources
             </button>
             <button
               onClick={() => onSelectSource("heuristic")}
@@ -114,7 +118,7 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
               onClick={() => onSelectSource("qwen_swarm")}
               className={`px-2.5 py-1 rounded-md font-medium text-xs transition-colors ${
                 selectedSource === "qwen_swarm"
-                  ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+                  ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
                   : "text-zinc-400 hover:text-white"
               }`}
             >
@@ -124,10 +128,10 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
         )}
       </div>
 
-      {/* Comparison Summary Banner (Only if Swarm data is present) */}
+      {/* Comparison Summary Banner (Only if Swarm data exists) */}
       {comparisonData.length > 1 && (
         <div className="mb-3 px-3 py-1.5 rounded-lg bg-[#0a0a0a] border border-indigo-500/20 flex items-center justify-between text-xs">
-          <span className="text-zinc-400 text-[11px]">Swarm Consensus:</span>
+          <span className="text-zinc-400 text-[11px]">Consensus Benchmark:</span>
           <div className="flex items-center gap-3 text-xs">
             {comparisonData.map((item) => (
               <span key={item.source} className="flex items-center gap-1 text-[11px]">
@@ -145,17 +149,21 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={formattedData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
-                <linearGradient id="colorAttVercelClean" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id="colorOracle" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4} />
                   <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
                 </linearGradient>
-                <linearGradient id="colorArousalVercelClean" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id="colorSwarm" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.35} />
+                  <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.0} />
+                </linearGradient>
+                <linearGradient id="colorArousal" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#ffffff" stopOpacity={0.25} />
                   <stop offset="95%" stopColor="#ffffff" stopOpacity={0.0} />
                 </linearGradient>
-                <linearGradient id="colorLoadVercelClean" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#818cf8" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#818cf8" stopOpacity={0.0} />
+                <linearGradient id="colorLoad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#a855f7" stopOpacity={0.2} />
+                  <stop offset="95%" stopColor="#a855f7" stopOpacity={0.0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
@@ -180,30 +188,99 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
                 iconType="circle"
                 wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
               />
-              <Area
-                type="monotone"
-                dataKey="Attention"
-                stroke="#6366f1"
-                strokeWidth={2}
-                fillOpacity={1}
-                fill="url(#colorAttVercelClean)"
-              />
-              <Area
-                type="monotone"
-                dataKey="Arousal"
-                stroke="#e4e4e7"
-                strokeWidth={1.5}
-                fillOpacity={1}
-                fill="url(#colorArousalVercelClean)"
-              />
-              <Area
-                type="monotone"
-                dataKey="CognitiveLoad"
-                stroke="#818cf8"
-                strokeWidth={1.5}
-                fillOpacity={1}
-                fill="url(#colorLoadVercelClean)"
-              />
+
+              {/* Multi-Source Dynamic Plotting */}
+              {selectedSource === "all" ? (
+                <>
+                  <Area
+                    type="monotone"
+                    dataKey="OracleAttention"
+                    name="Retention Oracle"
+                    stroke="#6366f1"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorOracle)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="SwarmAttention"
+                    name="Swarm Consensus"
+                    stroke="#06b6d4"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorSwarm)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="CognitiveLoad"
+                    name="Cognitive Load"
+                    stroke="#a855f7"
+                    strokeWidth={1.5}
+                    fillOpacity={0.2}
+                    fill="url(#colorLoad)"
+                  />
+                </>
+              ) : selectedSource === "qwen_swarm" ? (
+                <>
+                  <Area
+                    type="monotone"
+                    dataKey="Attention"
+                    name="Swarm Consensus (2 FPS)"
+                    stroke="#06b6d4"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorSwarm)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="Arousal"
+                    name="Sensory Arousal"
+                    stroke="#e4e4e7"
+                    strokeWidth={1.5}
+                    fillOpacity={1}
+                    fill="url(#colorArousal)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="CognitiveLoad"
+                    name="Cognitive Load"
+                    stroke="#a855f7"
+                    strokeWidth={1.5}
+                    fillOpacity={0.2}
+                    fill="url(#colorLoad)"
+                  />
+                </>
+              ) : (
+                <>
+                  <Area
+                    type="monotone"
+                    dataKey="Attention"
+                    name="Retention Oracle (50ms)"
+                    stroke="#6366f1"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorOracle)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="Arousal"
+                    name="Audience Arousal"
+                    stroke="#e4e4e7"
+                    strokeWidth={1.5}
+                    fillOpacity={1}
+                    fill="url(#colorArousal)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="CognitiveLoad"
+                    name="Cognitive Load"
+                    stroke="#818cf8"
+                    strokeWidth={1.5}
+                    fillOpacity={0.2}
+                    fill="url(#colorLoad)"
+                  />
+                </>
+              )}
             </AreaChart>
           </ResponsiveContainer>
         ) : (
