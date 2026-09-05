@@ -4,7 +4,7 @@ import tempfile
 import uuid
 from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 from backend.config import settings
 
@@ -24,6 +24,7 @@ class Clip(BaseModel):
     def current_frames(self) -> int:
         return max(0, self.end_frame - self.start_frame)
 
+    @computed_field
     @property
     def duration_seconds(self) -> float:
         return round(self.current_frames / self.fps, 2)
