@@ -15,22 +15,14 @@ import {
   Sparkles,
   Users,
   RotateCcw,
-  CheckCircle2,
   Clock,
-  Database,
-  Sliders,
-  ShieldCheck,
-  BarChart3,
-  Layers,
-  Server,
-  Workflow
+  Database
 } from "lucide-react";
 import { VideoPreview } from "@/components/VideoPreview";
 import { TelemetryChart } from "@/components/TelemetryChart";
 import { ShowrunnerLog, LogEntry } from "@/components/ShowrunnerLog";
 import { SceneTable } from "@/components/SceneTable";
 import { TrainingProgress } from "@/components/TrainingProgress";
-import { PacingFunnelCard } from "@/components/PacingFunnelCard";
 import { LenisProvider } from "@/components/LenisProvider";
 
 export default function StudioPage() {
@@ -706,22 +698,6 @@ export default function StudioPage() {
                     <ShowrunnerLog logs={logs} />
                   </div>
                 </div>
-
-                {/* Pacing Funnel Card */}
-                <div>
-                  <PacingFunnelCard
-                    clips={clips}
-                    worstClipId={worstClipId}
-                    reward={reward}
-                    isRunning={isRunning}
-                    onRunOptimization={handleRunOptimization}
-                    onStepOptimization={handleStepOptimization}
-                    onForceIntervention={handleForceIntervention}
-                    onRunSwarm={handleRunSwarm}
-                    onResetEpisode={handleResetEpisode}
-                    optimizerMode={optimizerMode}
-                  />
-                </div>
               </>
             )}
 
@@ -753,24 +729,17 @@ export default function StudioPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                  <SceneTable
-                    clips={clips}
-                    worstClipId={worstClipId}
-                    reward={reward}
-                  />
-                  <PacingFunnelCard
-                    clips={clips}
-                    worstClipId={worstClipId}
-                    reward={reward}
-                    isRunning={isRunning}
-                    onRunOptimization={handleRunOptimization}
-                    onStepOptimization={handleStepOptimization}
-                    onForceIntervention={handleForceIntervention}
-                    onRunSwarm={handleRunSwarm}
-                    onResetEpisode={handleResetEpisode}
-                    optimizerMode={optimizerMode}
-                  />
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                  <div className="lg:col-span-6">
+                    <SceneTable
+                      clips={clips}
+                      worstClipId={worstClipId}
+                      reward={reward}
+                    />
+                  </div>
+                  <div className="lg:col-span-6">
+                    <ShowrunnerLog logs={logs} />
+                  </div>
                 </div>
               </div>
             )}
@@ -790,24 +759,17 @@ export default function StudioPage() {
                   comparisonData={comparisonData}
                 />
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                  <PacingFunnelCard
-                    clips={clips}
-                    worstClipId={worstClipId}
-                    reward={reward}
-                    isRunning={isRunning}
-                    onRunOptimization={handleRunOptimization}
-                    onStepOptimization={handleStepOptimization}
-                    onForceIntervention={handleForceIntervention}
-                    onRunSwarm={handleRunSwarm}
-                    onResetEpisode={handleResetEpisode}
-                    optimizerMode={optimizerMode}
-                  />
-                  <SceneTable
-                    clips={clips}
-                    worstClipId={worstClipId}
-                    reward={reward}
-                  />
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                  <div className="lg:col-span-6">
+                    <SceneTable
+                      clips={clips}
+                      worstClipId={worstClipId}
+                      reward={reward}
+                    />
+                  </div>
+                  <div className="lg:col-span-6">
+                    <ShowrunnerLog logs={logs} />
+                  </div>
                 </div>
               </div>
             )}
