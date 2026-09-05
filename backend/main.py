@@ -517,7 +517,164 @@ def get_shot_pool():
         ]
     }
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ClickHouse SQL Studio — live query endpoint
+# Lets judges run real analytical SQL directly against the ClickHouse Cloud
+# instance from the browser, with safety guardrails enforced (max_result_rows,
+# max_rows_to_read, max_execution_time already set in client QUERY_SETTINGS).
+# ─────────────────────────────────────────────────────────────────────────────
+ALLOWED_SQL_PREFIXES = ("SELECT", "WITH", "SHOW", "DESCRIBE", "EXPLAIN")
+
+class ClickHouseQueryRequest(BaseModel):
+    sql: str
+    params: Dict[str, Any] = {}
+
+@app.post("/api/clickhouse/query")
+def run_clickhouse_query(req: ClickHouseQueryRequest):
+    """
+    Execute a read-only SQL query against live ClickHouse Cloud.
+    Safety: only SELECT/WITH/SHOW/DESCRIBE/EXPLAIN allowed.
+    Guardrails: max_result_rows=100k, max_rows_to_read=50M, max_execution_time=30s.
+    """
+    sql_clean = req.sql.strip()
+    upper = sql_clean.upper().lstrip()
+    if not any(upper.startswith(prefix) for prefix in ALLOWED_SQL_PREFIXES):
+        raise HTTPException(status_code=400, detail=f"Only read-only queries allowed ({', '.join(ALLOWED_SQL_PREFIXES)})")
+
+    if not clickhouse_client.is_cloud:
+        raise HTTPException(status_code=503, detail="ClickHouse Cloud not connected — using embedded analytics fallback")
+
+    start = time.time()
+    try:
+        rows = clickhouse_client.query(sql_clean, params=req.params)
+        elapsed_ms = round((time.time() - start) * 1000, 1)
+        columns = list(rows[0].keys()) if rows else []
+        return {
+            "status": "ok",
+            "clickhouse_mode": "cloud",
+            "host": settings.CLICKHOUSE_HOST,
+            "rows": rows,
+            "columns": columns,
+            "row_count": len(rows),
+            "elapsed_ms": elapsed_ms,
+            "guardrails": clickhouse_client.QUERY_SETTINGS,
+        }
+    except Exception as e:
+        elapsed_ms = round((time.time() - start) * 1000, 1)
+        raise HTTPException(status_code=500, detail=f"ClickHouse query error ({elapsed_ms}ms): {str(e)}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ClickHouse Warm — pre-wakes the Cloud instance so judges don't hit 28s cold start
+# ─────────────────────────────────────────────────────────────────────────────
+@app.get("/api/clickhouse/ping")
+def clickhouse_ping():
+    """
+    Lightweight ping to wake the ClickHouse Cloud instance from idle.
+    Call this on page load — ClickHouse auto-idles after 15 min inactivity.
+    """
+    start = time.time()
+    if clickhouse_client.is_cloud:
+        try:
+            rows = clickhouse_client.query("SELECT 1 AS pong")
+            elapsed_ms = round((time.time() - start) * 1000, 1)
+            return {"status": "awake", "elapsed_ms": elapsed_ms, "mode": "cloud"}
+        except Exception as e:
+            elapsed_ms = round((time.time() - start) * 1000, 1)
+            return {"status": "error", "elapsed_ms": elapsed_ms, "error": str(e)}
+    return {"status": "embedded", "elapsed_ms": 0, "mode": "sqlite"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Autopilot — autonomous agentic loop
+# Runs up to `max_steps` optimize→evaluate→showrunner cycles with no human input.
+# This is the core "agentic" demonstration: the system self-directs its edits.
+# ─────────────────────────────────────────────────────────────────────────────
+class AutopilotRequest(BaseModel):
+    max_steps: int = 8
+    target_reward: float = 0.75
+
+@app.post("/api/episodes/{episode_id}/autopilot")
+def run_autopilot(episode_id: str, req: AutopilotRequest):
+    """
+    Autonomous agentic editing loop — no human clicks required.
+    Each step: optimize → compute ClickHouse reward → if stuck → Showrunner B-roll.
+    Stops when target_reward is reached or max_steps exhausted.
+    All decisions and telemetry logged to ClickHouse Cloud in real time.
+    """
+    env = active_environments.get(episode_id)
+    if not env:
+        raise HTTPException(status_code=404, detail="Episode not found. Call /api/episodes/create first.")
+
+    optimizer = active_optimizers.get(episode_id)
+    if not optimizer:
+        raise HTTPException(status_code=404, detail="Optimizer session not found.")
+
+    from backend.showrunner.agent import ShowrunnerAgent
+    from backend.clickhouse.reward_queries import compute_clickhouse_reward
+
+    showrunner = ShowrunnerAgent()
+    log = []
+    best_reward = -1.0
+    state = env.state
+    stuck_count = 0
+    STUCK_THRESHOLD = settings.SHOWRUNNER_STUCK_THRESHOLD
+
+    for step in range(1, req.max_steps + 1):
+        step_start = time.time()
+        try:
+            step_res = optimizer.step()
+            state = env.state
+            reward = float(step_res.get("reward", 0.0))
+            reward_delta = round(reward - best_reward, 4) if best_reward >= 0 else 0.0
+            if reward > best_reward:
+                best_reward = reward
+
+            entry = {
+                "step": step,
+                "type": "optimize" if step_res.get("verdict") != "showrunner_intervened" else "showrunner_intervention",
+                "action": step_res.get("action_taken", "beam_step"),
+                "reward": reward,
+                "reward_delta": reward_delta,
+                "verdict": step_res.get("verdict", "improved"),
+                "shot_count": len(state.clips),
+                "elapsed_ms": round((time.time() - step_start) * 1000),
+            }
+            if step_res.get("showrunner_intervention"):
+                interv = step_res["showrunner_intervention"]
+                entry["decision_type"] = interv.get("decision_type")
+                entry["broll_clip_id"] = interv.get("broll_clip_id")
+                entry["reasoning"] = (interv.get("reasoning") or "")[:120]
+
+            log.append(entry)
+
+            if best_reward >= req.target_reward:
+                log.append({"step": step, "type": "goal_reached", "final_reward": best_reward})
+                break
+        except Exception as e:
+            log.append({"step": step, "type": "optimize_error", "error": str(e)})
+            break
+
+    # Final compile for video
+    final_metrics = compute_clickhouse_reward(episode_id, attempt_n=state.attempt_n)
+
+    return {
+        "status": "autopilot_complete",
+        "episode_id": episode_id,
+        "steps_run": len([e for e in log if e["type"] == "optimize"]),
+        "final_reward": final_metrics.scalar_reward,
+        "final_shot_count": len(state.clips),
+        "final_duration_s": final_metrics.duration_seconds,
+        "target_reached": final_metrics.scalar_reward >= req.target_reward,
+        "log": log,
+        "video_url": f"/api/episodes/{episode_id}/video?t={os.urandom(2).hex()}",
+        "clips": [c.model_dump() for c in state.clips],
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run("backend.main:app", host="0.0.0.0", port=port)
+

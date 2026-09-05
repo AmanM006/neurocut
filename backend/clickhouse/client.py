@@ -20,38 +20,65 @@ class ClickHouseClient:
         self.sqlite_conn = None
         self._init_connection()
 
+    # ────────────────────────────────────────────────────────────────────────────
+    # Query safety guardrails — recommended by ClickHouse engineers in their live
+    # hackathon Q&A (Ashot's question, answered by Zoe/Andre from ClickHouse).
+    # max_result_rows: cap result set to prevent memory exhaustion
+    # max_rows_to_read: abort scans reading more than 50M rows (prevent table scans)
+    # max_execution_time: kill any query running longer than 30 seconds
+    # ────────────────────────────────────────────────────────────────────────────
+    QUERY_SETTINGS = {
+        "max_result_rows": 100_000,
+        "max_rows_to_read": 50_000_000,
+        "max_execution_time": 30,
+    }
+
     def _init_connection(self):
-        # 1. Attempt connection to ClickHouse Cloud / server if host configured
-        try:
-            import clickhouse_connect
-            self.ch_client = clickhouse_connect.get_client(
-                host=settings.CLICKHOUSE_HOST,
-                port=settings.CLICKHOUSE_PORT,
-                username=settings.CLICKHOUSE_USER,
-                password=settings.CLICKHOUSE_PASSWORD,
-                secure=settings.CLICKHOUSE_SECURE,
-                database=settings.CLICKHOUSE_DATABASE if settings.CLICKHOUSE_DATABASE != "default" else None,
-                connect_timeout=3
-            )
-            # Create database and schema
-            self.ch_client.command(f"CREATE DATABASE IF NOT EXISTS {settings.CLICKHOUSE_DATABASE}")
-            schema_path = Path(__file__).parent / "schema.sql"
-            with open(schema_path, "r", encoding="utf-8") as f:
-                queries = f.read().split(";")
-                for q in queries:
-                    q = q.strip()
-                    if q:
-                        self.ch_client.command(q)
-            self.is_cloud = True
-            print(f"[ClickHouse] CONNECTED SUCCESSFULLY to ClickHouse at {settings.CLICKHOUSE_HOST}:{settings.CLICKHOUSE_PORT} (Database: {settings.CLICKHOUSE_DATABASE})")
-            return
-        except Exception as e:
-            # Fallback to embedded SQLite analytics engine
-            print(f"[ClickHouse Connection Check] ClickHouse Cloud/server not reachable at {settings.CLICKHOUSE_HOST}:{settings.CLICKHOUSE_PORT} ({type(e).__name__}).")
-            print("[ClickHouse Connection Check] -> Falling back to embedded local analytical engine for zero-crash execution.")
-            self.ch_client = None
-            self.is_cloud = False
-            self._init_sqlite_engine()
+        # 1. Attempt connection to ClickHouse Cloud / server if host configured.
+        #    ClickHouse Cloud auto-idles after 15 min — retry with back-off so a
+        #    cold-start wake doesn't crash server startup.
+        import time as _time
+        retry_delays = [0, 2, 5]  # immediate, then 2s, then 5s
+        last_err = None
+        for delay in retry_delays:
+            if delay:
+                print(f"[ClickHouse] Retrying connection in {delay}s (Cloud instance may be waking from idle)...")
+                _time.sleep(delay)
+            try:
+                import clickhouse_connect
+                self.ch_client = clickhouse_connect.get_client(
+                    host=settings.CLICKHOUSE_HOST,
+                    port=settings.CLICKHOUSE_PORT,
+                    username=settings.CLICKHOUSE_USER,
+                    password=settings.CLICKHOUSE_PASSWORD,
+                    secure=settings.CLICKHOUSE_SECURE,
+                    database=settings.CLICKHOUSE_DATABASE if settings.CLICKHOUSE_DATABASE != "default" else None,
+                    connect_timeout=10,  # generous for idle-wake
+                    settings=self.QUERY_SETTINGS,  # apply safety guardrails globally
+                )
+                # Create database and schema
+                self.ch_client.command(f"CREATE DATABASE IF NOT EXISTS {settings.CLICKHOUSE_DATABASE}")
+                schema_path = Path(__file__).parent / "schema.sql"
+                with open(schema_path, "r", encoding="utf-8") as f:
+                    queries = f.read().split(";")
+                    for q in queries:
+                        q = q.strip()
+                        if q:
+                            self.ch_client.command(q)
+                self.is_cloud = True
+                print(f"[ClickHouse] CONNECTED SUCCESSFULLY to ClickHouse at {settings.CLICKHOUSE_HOST}:{settings.CLICKHOUSE_PORT} (Database: {settings.CLICKHOUSE_DATABASE})")
+                print(f"[ClickHouse] Safety guardrails active: max_result_rows={self.QUERY_SETTINGS['max_result_rows']:,}, max_rows_to_read={self.QUERY_SETTINGS['max_rows_to_read']:,}, max_execution_time={self.QUERY_SETTINGS['max_execution_time']}s")
+                return
+            except Exception as e:
+                last_err = e
+                print(f"[ClickHouse] Connection attempt failed: {type(e).__name__}: {e}")
+
+        # All retries exhausted — fall back to embedded SQLite analytics engine
+        print(f"[ClickHouse Connection Check] ClickHouse Cloud/server not reachable at {settings.CLICKHOUSE_HOST}:{settings.CLICKHOUSE_PORT} after retries.")
+        print("[ClickHouse Connection Check] -> Falling back to embedded local analytical engine for zero-crash execution.")
+        self.ch_client = None
+        self.is_cloud = False
+        self._init_sqlite_engine()
 
     def _init_sqlite_engine(self):
         db_path = settings.DATA_DIR / "neurocut_analytics.db"
