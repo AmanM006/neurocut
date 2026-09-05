@@ -49,7 +49,7 @@ export const LinearNavbar: React.FC = () => {
             <span className="font-inter font-semibold text-sm tracking-tight text-white">
               NEURO-CUT
             </span>
-            <span className="px-1.5 py-0.5 rounded text-[9px] font-berkeley uppercase tracking-wider bg-white/[0.06] text-zinc-400 border border-white/[0.08]">
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-inter font-medium uppercase tracking-wider bg-white/[0.06] text-zinc-400 border border-white/[0.08]">
               v2.0
             </span>
           </div>
