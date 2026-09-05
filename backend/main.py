@@ -70,6 +70,23 @@ def get_health():
 @app.post("/api/episodes/create")
 def create_episode(req: CreateEpisodeRequest):
     episode_id = req.episode_id or f"ep_{os.urandom(4).hex()}"
+    
+    # Return existing session instantly if already initialized
+    if episode_id in active_environments:
+        env = active_environments[episode_id]
+        metrics = compute_clickhouse_reward(episode_id, attempt_n=env.state.attempt_n)
+        return {
+            "episode_id": episode_id,
+            "status": "ready",
+            "attempt_n": env.state.attempt_n,
+            "clips": [c.model_dump() for c in env.state.clips],
+            "reward": metrics.scalar_reward,
+            "mean_attention": metrics.mean_attention,
+            "worst_clip_id": metrics.worst_clip_id,
+            "worst_drop": metrics.worst_drop,
+            "video_url": f"/api/episodes/{episode_id}/video"
+        }
+
     env = EditingEnvironment(episode_id=episode_id)
     optimizer = BeamSearchOptimizer(env)
     

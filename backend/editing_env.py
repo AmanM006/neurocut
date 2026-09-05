@@ -171,7 +171,7 @@ class EditingEnvironment:
                 ffmpeg_bin,
                 "-y",
                 "-f", "lavfi", "-i", f"color=c={color}:s=1280x720:r=24:d={duration}",
-                "-f", "lavfi", "-i", f"sine=frequency=220:duration={duration}",
+                "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
                 "-c:v", "libx264",
                 "-pix_fmt", "yuv420p",
                 "-c:a", "aac",
