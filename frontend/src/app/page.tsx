@@ -6,6 +6,7 @@ import { VideoPreview } from "@/components/VideoPreview";
 import { TelemetryChart } from "@/components/TelemetryChart";
 import { ShowrunnerLog, LogEntry } from "@/components/ShowrunnerLog";
 import { TrainingProgress } from "@/components/TrainingProgress";
+import { LenisProvider } from "@/components/LenisProvider";
 
 export default function Home() {
   const [episodeId, setEpisodeId] = useState<string>("ep_main");
@@ -288,83 +289,91 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-[#080C10] flex flex-col text-slate-100">
-      <Controls
-        isRunning={isRunning}
-        onRunOptimization={handleRunOptimization}
-        onStepOptimization={handleStepOptimization}
-        onRunSwarm={handleRunSwarm}
-        onForceIntervention={handleForceIntervention}
-        onResetEpisode={initEpisode}
-        episodeId={episodeId}
-        clickhouseMode={clickhouseMode}
-        optimizerMode={optimizerMode}
-        onToggleOptimizer={setOptimizerMode}
-      />
+    <LenisProvider>
+      <main className="min-h-screen bg-[#000000] flex flex-col text-zinc-100 selection:bg-amber-400 selection:text-black">
+        <Controls
+          isRunning={isRunning}
+          onRunOptimization={handleRunOptimization}
+          onStepOptimization={handleStepOptimization}
+          onRunSwarm={handleRunSwarm}
+          onForceIntervention={handleForceIntervention}
+          onResetEpisode={initEpisode}
+          episodeId={episodeId}
+          clickhouseMode={clickhouseMode}
+          optimizerMode={optimizerMode}
+          onToggleOptimizer={setOptimizerMode}
+        />
 
-      <div className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Left Column: Panel A (Preview) & Panel B (Telemetry) */}
-        <div className="lg:col-span-7 flex flex-col gap-5">
-          <div className="flex-1">
-            <VideoPreview
-              videoUrl={videoUrl}
-              clips={clips}
-              attemptN={attemptN}
-              reward={reward}
-              worstClipId={worstClipId}
-            />
-          </div>
+        <div className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-5">
+          {/* Left Column: Panel A (Preview) & Panel B (Telemetry) */}
+          <div className="lg:col-span-7 flex flex-col gap-5">
+            <div className="flex-1">
+              <VideoPreview
+                videoUrl={videoUrl}
+                clips={clips}
+                attemptN={attemptN}
+                reward={reward}
+                worstClipId={worstClipId}
+              />
+            </div>
 
-          {/* Tab Switcher for Panel B / Panel D */}
-          <div className="flex items-center justify-between bg-slate-900/60 p-1 rounded-lg border border-slate-800 text-xs font-mono">
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setPanelBTab("telemetry")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition ${
-                  panelBTab === "telemetry"
-                    ? "bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                <span>Panel B: Audience Retention Curves</span>
-              </button>
-              <button
-                onClick={() => setPanelBTab("training")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition ${
-                  panelBTab === "training"
-                    ? "bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                <span>Panel D: PPO RL Policy Training</span>
-              </button>
+            {/* Tab Switcher for Panel B / Panel D */}
+            <div className="flex items-center justify-between bg-[#080808] p-1.5 rounded-xl border border-white/5 text-xs font-mono shadow-2xl">
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setPanelBTab("telemetry")}
+                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg font-medium transition-all duration-200 ${
+                    panelBTab === "telemetry"
+                      ? "bg-cyan-500/15 text-cyan-300 font-semibold border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.15)]"
+                      : "text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]"
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${panelBTab === "telemetry" ? "bg-cyan-400 animate-pulse" : "bg-zinc-600"}`} />
+                  <span>Panel B: Audience Retention Curves</span>
+                </button>
+                <button
+                  onClick={() => setPanelBTab("training")}
+                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg font-medium transition-all duration-200 ${
+                    panelBTab === "training"
+                      ? "bg-amber-500/15 text-amber-300 font-semibold border border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+                      : "text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]"
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${panelBTab === "training" ? "bg-amber-400 animate-pulse" : "bg-zinc-600"}`} />
+                  <span>Panel D: PPO Policy Training (5k Eps)</span>
+                </button>
+              </div>
+              <div className="hidden sm:flex items-center gap-2 text-[10px] text-zinc-500 pr-2">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.4)]" />
+                <span>Cloud Telemetry Active</span>
+              </div>
+            </div>
+
+            <div className="flex-1">
+              {panelBTab === "telemetry" ? (
+                <TelemetryChart
+                  series={series}
+                  reward={reward}
+                  meanAttention={meanAttention}
+                  worstDrop={worstDrop}
+                  worstClipId={worstClipId}
+                  clickhouseMode={clickhouseMode}
+                  selectedSource={selectedSource}
+                  onSelectSource={handleSelectSource}
+                  comparisonData={comparisonData}
+                />
+              ) : (
+                <TrainingProgress />
+              )}
             </div>
           </div>
 
-          <div className="flex-1">
-            {panelBTab === "telemetry" ? (
-              <TelemetryChart
-                series={series}
-                reward={reward}
-                meanAttention={meanAttention}
-                worstDrop={worstDrop}
-                worstClipId={worstClipId}
-                clickhouseMode={clickhouseMode}
-                selectedSource={selectedSource}
-                onSelectSource={handleSelectSource}
-                comparisonData={comparisonData}
-              />
-            ) : (
-              <TrainingProgress />
-            )}
+          {/* Right Column: Panel C (Showrunner Log) */}
+          <div className="lg:col-span-5 flex flex-col">
+            <ShowrunnerLog logs={logs} />
           </div>
         </div>
-
-        {/* Right Column: Panel C (Showrunner Log) */}
-        <div className="lg:col-span-5 flex flex-col">
-          <ShowrunnerLog logs={logs} />
-        </div>
-      </div>
-    </main>
+      </main>
+    </LenisProvider>
   );
 }
