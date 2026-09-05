@@ -99,16 +99,16 @@ export const TrainingProgress: React.FC = () => {
 
   if (!data && loading) {
     return (
-      <div className="bg-[#050505] border border-white/[0.08] rounded-xl p-4 flex flex-col h-full shadow-2xl">
+      <div className="bg-[#0c0c0e] border border-white/[0.07] rounded-2xl p-4 sm:p-5 flex flex-col h-full shadow-2xl">
         <ChartSkeleton />
       </div>
     );
   }
 
   return (
-    <div className="bg-[#050505] border border-white/[0.08] rounded-xl p-4 flex flex-col h-full shadow-2xl relative overflow-hidden">
+    <div className="bg-[#0c0c0e] border border-white/[0.07] rounded-2xl p-4 sm:p-5 flex flex-col h-full shadow-2xl relative overflow-hidden">
       {/* Top Ambient Glow Accent */}
-      <div className="absolute top-0 left-1/4 right-1/4 h-px bg-gradient-to-r from-transparent via-amber-500/30 to-transparent pointer-events-none" />
+      <div className="absolute top-0 left-1/4 right-1/4 h-px bg-gradient-to-r from-transparent via-amber-500/20 to-transparent pointer-events-none" />
 
       {/* Header */}
       <div className="flex items-center justify-between pb-3.5 border-b border-white/[0.06] mb-3.5">
