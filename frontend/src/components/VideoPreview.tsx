@@ -46,11 +46,10 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({
   };
 
   const steps = clips.length > 0 ? clips : [
-    { clip_id: "shot_01_intro", scene_id: "intro", take_id: "take_1", duration_seconds: 4.0, is_broll: false, description: "Opening Establishing Shot" },
-    { clip_id: "shot_02_dialogue", scene_id: "dialogue", take_id: "take_2", duration_seconds: 4.5, is_broll: false, description: "Tense Character Exchange" },
-    { clip_id: "shot_03_standoff", scene_id: "standoff", take_id: "take_1", duration_seconds: 6.0, is_broll: false, description: "Pacing Bottleneck Sequence" },
-    { clip_id: "broll_veo_cutaway", scene_id: "standoff", take_id: "veo_3.1", duration_seconds: 2.0, is_broll: true, description: "Showrunner Veo 3.1 B-Roll Cutaway" },
-    { clip_id: "shot_05_climax", scene_id: "climax", take_id: "take_1", duration_seconds: 5.5, is_broll: false, description: "Climactic Breakthrough Action" },
+    { clip_id: "shot_01_intro", scene_id: "scene_1_arrival", take_id: "take_1", duration_seconds: 4.0, is_broll: false, description: "Act 1: Arrival (Street)" },
+    { clip_id: "shot_02_dialogue_take1", scene_id: "scene_2_confrontation", take_id: "take_1", duration_seconds: 5.0, is_broll: false, description: "Act 2: Confrontation (Interrogation)" },
+    { clip_id: "shot_03_standoff", scene_id: "scene_3_standoff", take_id: "take_1", duration_seconds: 6.0, is_broll: false, description: "Act 3: Standoff (Pacing Risk)" },
+    { clip_id: "shot_05_climax", scene_id: "scene_4_breakthrough", take_id: "take_2", duration_seconds: 4.0, is_broll: false, description: "Act 4: Breakthrough (Climax)" },
   ];
 
   const totalDuration = steps.reduce((acc, c) => acc + getDuration(c), 0);
@@ -78,7 +77,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({
             Cut #{attemptN}
           </span>
           <span className="px-2.5 py-1 text-xs font-mono font-semibold rounded-lg bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
-            {(reward || 0.7301).toFixed(4)}
+            {(reward || 0.2710).toFixed(4)}
           </span>
         </div>
       </div>

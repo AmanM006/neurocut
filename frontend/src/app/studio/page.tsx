@@ -32,9 +32,9 @@ export default function StudioPage() {
   const [videoUrl, setVideoUrl] = useState<string>("");
   const [clips, setClips] = useState<any[]>([]);
   const [attemptN, setAttemptN] = useState<number>(0);
-  const [reward, setReward] = useState<number>(0.7301);
-  const [meanAttention, setMeanAttention] = useState<number>(0.73);
-  const [worstDrop, setWorstDrop] = useState<number>(-0.041);
+  const [reward, setReward] = useState<number>(0.2710);
+  const [meanAttention, setMeanAttention] = useState<number>(0.629);
+  const [worstDrop, setWorstDrop] = useState<number>(-0.21);
   const [worstClipId, setWorstClipId] = useState<string | null>("shot_03_standoff");
   const [series, setSeries] = useState<any[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -634,12 +634,12 @@ export default function StudioPage() {
             <div className="flex items-center gap-3 text-xs text-zinc-400">
               <span className="flex items-center gap-1.5">
                 <span className="text-zinc-500">Reward:</span>
-                <span className="font-mono font-semibold text-white">{(reward || 0.7301).toFixed(4)}</span>
+                <span className="font-mono font-semibold text-white">{(reward || 0.2710).toFixed(4)}</span>
               </span>
               <span className="text-zinc-700">•</span>
               <span className="flex items-center gap-1.5">
                 <span className="text-zinc-500">Audience Flow:</span>
-                <span className="font-mono font-semibold text-indigo-400">{((meanAttention || 0.73) * 100).toFixed(1)}%</span>
+                <span className="font-mono font-semibold text-indigo-400">{((meanAttention || 0.629) * 100).toFixed(1)}%</span>
               </span>
             </div>
           </div>
@@ -659,7 +659,7 @@ export default function StudioPage() {
                       <span className="text-[11px] text-emerald-400 font-semibold">+14.2%</span>
                     </div>
                     <div className="text-2xl font-bold font-mono text-white tracking-tight">
-                      {(reward || 0.7301).toFixed(4)}
+                      {(reward || 0.2710).toFixed(4)}
                     </div>
                     <p className="text-xs text-zinc-500 mt-1">
                       ClickHouse Cloud 50ms window functions
@@ -672,7 +672,7 @@ export default function StudioPage() {
                       <span className="text-[11px] text-indigo-400 font-semibold">2 FPS Ingest</span>
                     </div>
                     <div className="text-2xl font-bold font-mono text-white tracking-tight">
-                      {((meanAttention || 0.73) * 100).toFixed(1)}%
+                      {((meanAttention || 0.629) * 100).toFixed(1)}%
                     </div>
                     <p className="text-xs text-zinc-500 mt-1">
                       4 Personas (Action, Drama, Sensory, Casual)
@@ -685,7 +685,7 @@ export default function StudioPage() {
                       <span className="text-[11px] text-emerald-400 font-semibold">Stabilized</span>
                     </div>
                     <div className="text-2xl font-bold font-mono text-white tracking-tight">
-                      {worstDrop ? (worstDrop * 100).toFixed(1) + "%" : "-4.1%"}
+                      {worstDrop ? (worstDrop * 100).toFixed(1) + "%" : "-21.0%"}
                     </div>
                     <p className="text-xs text-zinc-500 mt-1 truncate" title={worstClipId || "None"}>
                       {worstClipId ? worstClipId.replace("shot_", "") : "Scene 3 Standoff"}
@@ -695,13 +695,15 @@ export default function StudioPage() {
                   <div className="bg-[#050505] border border-[#1a1a1a] hover:border-[#2a2a2a] rounded-xl p-4 transition-all">
                     <div className="flex items-center justify-between text-xs text-zinc-400 mb-2 font-medium">
                       <span>Directorial Action</span>
-                      <span className="text-[11px] text-indigo-400 font-semibold">Veo 3.1</span>
+                      <span className="text-[11px] text-indigo-400 font-semibold">
+                        {clips.some((c) => c.is_broll) ? "Veo 3.1" : attemptN > 0 ? "Beam Search" : "Rough Cut"}
+                      </span>
                     </div>
                     <div className="text-2xl font-bold text-indigo-300 tracking-tight truncate">
-                      Macro Cutaway
+                      {clips.some((c) => c.is_broll) ? "Macro Cutaway" : attemptN > 0 ? "Timeline Trim" : "Rough Assembly"}
                     </div>
                     <p className="text-xs text-zinc-500 mt-1">
-                      100% scenes preserved (zero story collapse)
+                      {clips.length > 0 ? `${clips.length} scenes active (zero story collapse)` : "4 scenes active (19.0s baseline)"}
                     </p>
                   </div>
                 </div>
