@@ -22,11 +22,12 @@ class BeamSearchOptimizer:
         self.history: List[Dict[str, Any]] = []
         self.stuck_counter: Dict[str, int] = {}  # counts attempts where clip remained bottleneck
 
-    def evaluate_state(self, state: TimelineState) -> Tuple[TimelineState, RewardMetrics]:
-        """Physically compiles video, generates telemetry, writes to ClickHouse, and gets reward."""
-        # 1. Compile physical MP4
-        compiled_path = self.env.compile_timeline(state)
-        state.compiled_video_path = compiled_path
+    def evaluate_state(self, state: TimelineState, compile_video: bool = True) -> Tuple[TimelineState, RewardMetrics]:
+        """Physically compiles video (if compile_video=True), generates telemetry, writes to ClickHouse, and gets reward."""
+        # 1. Compile physical MP4 only when needed (e.g. initial, winning candidate, or showrunner)
+        if compile_video:
+            compiled_path = self.env.compile_timeline(state)
+            state.compiled_video_path = compiled_path
 
         # 2. Score timeline
         telemetry = self.scorer.score_timeline(state)
@@ -80,8 +81,8 @@ class BeamSearchOptimizer:
                 stuck_clip_id=worst_clip,
                 attempt_history=self.history
             )
-            # Re-evaluate with newly injected B-roll
-            new_state, new_metrics = self.evaluate_state(new_state)
+            # Re-evaluate with newly injected B-roll (physically compile video)
+            new_state, new_metrics = self.evaluate_state(new_state, compile_video=True)
             self.env.state = new_state
             self.stuck_counter[worst_clip] = 0  # reset counter
 
@@ -92,7 +93,11 @@ class BeamSearchOptimizer:
                 target_clip_id=worst_clip,
                 reward=new_metrics.scalar_reward,
                 verdict="showrunner_intervened",
-                reasoning=intervention_report["reasoning"]
+                reasoning=intervention_report["reasoning"],
+                reward_v1_mean=new_metrics.reward_v1_mean,
+                reward_v2_coverage=new_metrics.reward_v2_coverage,
+                shot_count=new_metrics.shot_count,
+                duration_seconds=new_metrics.duration_seconds
             )
 
             step_result["verdict"] = "showrunner_intervened"
@@ -109,17 +114,21 @@ class BeamSearchOptimizer:
         best_reward = metrics.scalar_reward
         best_action_msg = ""
 
+        # Rapid exploration: skip FFmpeg video compilation on unchosen candidate rollouts
         for act in candidates:
             cand_state, ok, msg = self.env.apply_action(state, act["type"], **act["params"])
             if not ok:
                 continue
-            cand_state, cand_metrics = self.evaluate_state(cand_state)
+            cand_state, cand_metrics = self.evaluate_state(cand_state, compile_video=False)
             if cand_metrics.scalar_reward > best_reward:
                 best_reward = cand_metrics.scalar_reward
                 best_candidate_state = cand_state
                 best_action_msg = msg
 
         if best_candidate_state:
+            # Physically compile winning timeline MP4 for the directorial player
+            compiled_path = self.env.compile_timeline(best_candidate_state)
+            best_candidate_state.compiled_video_path = compiled_path
             self.env.state = best_candidate_state
             verdict = "improved"
             reasoning = f"Applied edit: {best_action_msg} (Reward increased to {best_reward})"
@@ -134,7 +143,11 @@ class BeamSearchOptimizer:
             target_clip_id=worst_clip,
             reward=metrics.scalar_reward,
             verdict=verdict,
-            reasoning=reasoning
+            reasoning=reasoning,
+            reward_v1_mean=metrics.reward_v1_mean,
+            reward_v2_coverage=metrics.reward_v2_coverage,
+            shot_count=metrics.shot_count,
+            duration_seconds=metrics.duration_seconds
         )
 
         step_result["verdict"] = verdict

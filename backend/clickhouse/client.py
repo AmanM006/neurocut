@@ -148,21 +148,30 @@ class ClickHouseClient:
             self.sqlite_conn.commit()
 
     def insert_edit_attempt(self, episode_id: str, attempt_n: int, action: str, 
-                            target_clip_id: str, reward: float, verdict: str, reasoning: str):
+                            target_clip_id: str, reward: float, verdict: str, reasoning: str,
+                            reward_v1_mean: Optional[float] = None, reward_v2_coverage: Optional[float] = None,
+                            shot_count: Optional[int] = None, duration_seconds: Optional[float] = None):
+        r_v1 = float(reward_v1_mean if reward_v1_mean is not None else reward)
+        r_v2 = float(reward_v2_coverage if reward_v2_coverage is not None else reward)
+        sc = int(shot_count if shot_count is not None else 0)
+        dur = float(duration_seconds if duration_seconds is not None else 0.0)
+
         if self.is_cloud and self.ch_client:
-            data = [[episode_id, attempt_n, action, target_clip_id, float(reward), verdict, reasoning]]
+            data = [[episode_id, attempt_n, action, target_clip_id, float(reward), verdict, reasoning, r_v1, r_v2, sc, dur]]
             self._execute_with_retry(
                 self.ch_client.insert,
                 f"{settings.CLICKHOUSE_DATABASE}.edit_attempts",
                 data,
-                column_names=["episode_id", "attempt_n", "action", "target_clip_id", "reward", "verdict", "reasoning"]
+                column_names=["episode_id", "attempt_n", "action", "target_clip_id", "reward", "verdict", "reasoning",
+                              "reward_v1_mean", "reward_v2_coverage", "shot_count", "duration_seconds"]
             )
         else:
             cur = self.sqlite_conn.cursor()
             cur.execute("""
-                INSERT INTO edit_attempts (episode_id, attempt_n, action, target_clip_id, reward, verdict, reasoning)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (episode_id, attempt_n, action, target_clip_id, reward, verdict, reasoning))
+                INSERT INTO edit_attempts (episode_id, attempt_n, action, target_clip_id, reward, verdict, reasoning,
+                                          reward_v1_mean, reward_v2_coverage, shot_count, duration_seconds)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (episode_id, attempt_n, action, target_clip_id, reward, verdict, reasoning, r_v1, r_v2, sc, dur))
             self.sqlite_conn.commit()
 
     def insert_showrunner_decision(self, episode_id: str, decision_type: str, target_scene: str, reasoning: str):

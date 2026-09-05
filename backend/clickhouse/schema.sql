@@ -21,6 +21,10 @@ CREATE TABLE IF NOT EXISTS edit_attempts (
   reward Float32,
   verdict String, -- 'pass' | 'retry' | 'showrunner_intervened'
   reasoning String,
+  reward_v1_mean Float32 DEFAULT reward,
+  reward_v2_coverage Float32 DEFAULT reward,
+  shot_count UInt16 DEFAULT 0,
+  duration_seconds Float32 DEFAULT 0.0,
   ts DateTime DEFAULT now()
 ) ENGINE = MergeTree ORDER BY (episode_id, attempt_n);
 

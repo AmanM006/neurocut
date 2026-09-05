@@ -80,22 +80,42 @@ class EditingEnvironment:
     def _ensure_sample_shots(self):
         """Generates realistic procedural cinematic shots via FFmpeg if not present."""
         sample_shot_specs = [
+            # Act 1: Arrival & Exposition (scene_1_arrival)
             {
                 "id": "shot_01_intro",
                 "scene": "scene_1_arrival",
                 "take": "take_1",
                 "duration": 4.0,
                 "color": "0x1A2530",
-                "text": "SCENE 1: ARRIVAL\\n[WIDE ESTABLISHING SHOT]",
+                "text": "ACT 1: ARRIVAL\\n[WIDE RAIN-SLICKED STREET]",
                 "desc": "Wide cinematic shot of rain-slicked city streets at night"
             },
+            {
+                "id": "shot_01_interior",
+                "scene": "scene_1_arrival",
+                "take": "take_2",
+                "duration": 3.5,
+                "color": "0x16202A",
+                "text": "ACT 1: OFFICE ARRIVAL\\n[DETECTIVE OFFICE SLOW PAN]",
+                "desc": "Slow atmospheric pan across smoke-filled detective office"
+            },
+            {
+                "id": "shot_01_dossier",
+                "scene": "scene_1_arrival",
+                "take": "take_3",
+                "duration": 2.5,
+                "color": "0x121A22",
+                "text": "ACT 1: DOSSIER\\n[ENCRYPTED CASE EVIDENCE]",
+                "desc": "Close-up macro of classified suspect case dossier"
+            },
+            # Act 2: Confrontation & Interrogation (scene_2_confrontation)
             {
                 "id": "shot_02_dialogue_take1",
                 "scene": "scene_2_confrontation",
                 "take": "take_1",
                 "duration": 5.0,
                 "color": "0x3A2010",
-                "text": "SCENE 2: CONFRONTATION\\n[PROTAGONIST - TAKE 1]",
+                "text": "ACT 2: CONFRONTATION\\n[PROTAGONIST - TAKE 1]",
                 "desc": "Medium close-up of protagonist questioning suspect"
             },
             {
@@ -104,35 +124,91 @@ class EditingEnvironment:
                 "take": "take_2",
                 "duration": 4.5,
                 "color": "0x321E14",
-                "text": "SCENE 2: CONFRONTATION\\n[PROTAGONIST - TAKE 2 (TIGHT)]",
+                "text": "ACT 2: CONFRONTATION\\n[PROTAGONIST - TAKE 2 (TIGHT)]",
                 "desc": "Closer, more intense take of protagonist confrontation"
             },
+            {
+                "id": "shot_02_interrogation_wide",
+                "scene": "scene_2_confrontation",
+                "take": "take_3",
+                "duration": 4.0,
+                "color": "0x2D1B12",
+                "text": "ACT 2: INTERROGATION\\n[TWO-SHOT ACROSS TABLE]",
+                "desc": "Two-shot across steel interrogation table under flickering light"
+            },
+            {
+                "id": "shot_02_witness_cut",
+                "scene": "scene_2_confrontation",
+                "take": "take_4",
+                "duration": 3.0,
+                "color": "0x251810",
+                "text": "ACT 2: OBSERVATION\\n[MIRROR REACTION]",
+                "desc": "Silhouette of witness watching through two-way glass"
+            },
+            # Act 3: Standoff & Bottleneck (scene_3_standoff)
             {
                 "id": "shot_03_standoff",
                 "scene": "scene_3_standoff",
                 "take": "take_1",
                 "duration": 6.0,  # Intentionally long/slow to simulate pacing bottleneck
                 "color": "0x102020",
-                "text": "SCENE 3: STANDOFF\\n[SUSPECT SILENT PAUSE]",
+                "text": "ACT 3: STANDOFF\\n[SUSPECT SILENT PAUSE]",
                 "desc": "Long lingering take of suspect refusing to speak (pacing drop risk)"
+            },
+            {
+                "id": "shot_03_standoff_tight",
+                "scene": "scene_3_standoff",
+                "take": "take_2",
+                "duration": 4.0,
+                "color": "0x142828",
+                "text": "ACT 3: STANDOFF TIGHT\\n[SWEATING SUSPECT CLOSE-UP]",
+                "desc": "Intense close-up of suspect sweating under tungsten spotlight"
             },
             {
                 "id": "shot_04_reaction",
                 "scene": "scene_3_standoff",
-                "take": "take_2",
+                "take": "take_3",
                 "duration": 3.5,
                 "color": "0x251525",
-                "text": "SCENE 3: STANDOFF\\n[DETECTIVE REACTION]",
-                "desc": "Tight cut to detective observing nervous twitch"
+                "text": "ACT 3: PSYCHOLOGICAL REACTION\\n[DETECTIVE EYE TWITCH]",
+                "desc": "Tight cut to detective observing suspect's nervous eye twitch"
+            },
+            {
+                "id": "shot_04_clock_insert",
+                "scene": "scene_3_standoff",
+                "take": "take_4",
+                "duration": 2.5,
+                "color": "0x1E101E",
+                "text": "ACT 3: CLOCK CUTAWAY\\n[SECONDS TICKING]",
+                "desc": "Macro cutaway to antique wall clock ticking away silence"
+            },
+            # Act 4: Breakthrough, Climax & Outro (scene_4_breakthrough)
+            {
+                "id": "shot_05_confrontation",
+                "scene": "scene_4_breakthrough",
+                "take": "take_1",
+                "duration": 3.5,
+                "color": "0x2B0D0D",
+                "text": "ACT 4: CONFRONTATION\\n[ALLEYWAY GUN DRAWN]",
+                "desc": "Gun drawn in rainy alleyway climax"
             },
             {
                 "id": "shot_05_climax",
                 "scene": "scene_4_breakthrough",
-                "take": "take_1",
+                "take": "take_2",
                 "duration": 4.0,
                 "color": "0x301010",
-                "text": "SCENE 4: BREAKTHROUGH\\n[CLIMACTIC REVELATION]",
+                "text": "ACT 4: BREAKTHROUGH\\n[CONFESSION & REVELATION]",
                 "desc": "Fast paced climax and document reveal"
+            },
+            {
+                "id": "shot_05_outro",
+                "scene": "scene_4_breakthrough",
+                "take": "take_3",
+                "duration": 3.5,
+                "color": "0x180818",
+                "text": "ACT 4: RESOLUTION\\n[NEON SHADOWS OUTRO]",
+                "desc": "Atmospheric noir fade to black with siren reflections"
             }
         ]
 

@@ -27,7 +27,7 @@ from backend.config import settings
 from backend.editing_env import TimelineState, Clip, EditingEnvironment
 from backend.scoring.heuristic_scorer import HeuristicScorer
 from backend.clickhouse.client import clickhouse_client
-from backend.clickhouse.reward_queries import compute_clickhouse_reward, RewardMetrics
+from backend.clickhouse.reward_queries import compute_clickhouse_reward, compute_local_reward, RewardMetrics
 
 # Check PyTorch availability
 try:
@@ -355,7 +355,11 @@ class PPOAgent:
         5. Computes retention delta reward R_t - R_{t-1}.
         """
         prev_state = self.env.state.clone()
-        prev_metrics = compute_clickhouse_reward(self.episode_id, attempt_n=prev_state.attempt_n)
+        if compile_video:
+            prev_metrics = compute_clickhouse_reward(self.episode_id, attempt_n=prev_state.attempt_n)
+        else:
+            prev_telemetry = self.scorer.score_timeline(prev_state)
+            prev_metrics = compute_local_reward(prev_telemetry, self.episode_id, expected_shots=4)
         prev_reward = prev_metrics.scalar_reward
 
         # 1. Select action from policy
@@ -386,7 +390,8 @@ class PPOAgent:
                 from backend.showrunner.tools import generate_broll_clip
                 broll_clip = generate_broll_clip(
                     target_scene=target_clip_id,
-                    prompt="Dramatic slow-motion cutaway reaction"
+                    prompt="Dramatic slow-motion cutaway reaction",
+                    synthesize_video=compile_video
                 )
                 self.env.shot_pool[broll_clip.clip_id] = broll_clip
                 new_state, applied, msg = self.env.apply_action(prev_state, "insert_broll", target_clip_id=target_clip_id, broll_clip_id=broll_clip.clip_id)
@@ -411,10 +416,11 @@ class PPOAgent:
 
             # 4. Score and ingest telemetry into ClickHouse Cloud
             telemetry = self.scorer.score_timeline(new_state)
-            clickhouse_client.insert_telemetry([p.model_dump() for p in telemetry])
-
-            # 5. Query ClickHouse Cloud for new retention oracle
-            new_metrics = compute_clickhouse_reward(self.episode_id, attempt_n=new_state.attempt_n)
+            if compile_video:
+                clickhouse_client.insert_telemetry([p.model_dump() for p in telemetry])
+                new_metrics = compute_clickhouse_reward(self.episode_id, attempt_n=new_state.attempt_n)
+            else:
+                new_metrics = compute_local_reward(telemetry, self.episode_id, expected_shots=4)
             new_reward = new_metrics.scalar_reward
 
             # 6. Compute Load-Bearing Retention Delta Reward
@@ -452,15 +458,20 @@ class PPOAgent:
         )
 
         # 8. Log attempt to ClickHouse
-        clickhouse_client.insert_edit_attempt(
-            episode_id=self.episode_id,
-            attempt_n=new_state.attempt_n,
-            action=f"ppo_{action_type}",
-            target_clip_id=target_clip_id or "",
-            reward=float(new_reward),
-            verdict=verdict,
-            reasoning=f"PPO Policy selected action {action_spec.action_idx} ({action_type}) targeting {target_clip_id}"
-        )
+        if compile_video:
+            clickhouse_client.insert_edit_attempt(
+                episode_id=self.episode_id,
+                attempt_n=new_state.attempt_n,
+                action=f"ppo_{action_type}",
+                target_clip_id=target_clip_id or "",
+                reward=float(new_reward),
+                verdict=verdict,
+                reasoning=f"PPO Policy selected action {action_spec.action_idx} ({action_type}) targeting {target_clip_id}",
+                reward_v1_mean=new_metrics.reward_v1_mean,
+                reward_v2_coverage=new_metrics.reward_v2_coverage,
+                shot_count=new_metrics.shot_count,
+                duration_seconds=new_metrics.duration_seconds
+            )
 
         return {
             "episode_id": self.episode_id,
@@ -623,26 +634,30 @@ class PPOAgent:
             self.model.b_critic = data["b_critic"]
             return True
 
-    def reset_episode(self, episode_id: str) -> float:
+    def reset_episode(self, episode_id: str, log_to_clickhouse: bool = True) -> float:
         """Resets the environment for a new training or evaluation episode."""
         self.episode_id = episode_id
         self.env = EditingEnvironment(episode_id=episode_id)
         
-        # Ingest initial rough cut telemetry
         initial_telemetry = self.scorer.score_timeline(self.env.state)
-        clickhouse_client.insert_telemetry([p.model_dump() for p in initial_telemetry])
-        
-        # Compute baseline reward via ClickHouse
-        initial_metrics = compute_clickhouse_reward(episode_id, attempt_n=0)
+        if log_to_clickhouse:
+            clickhouse_client.insert_telemetry([p.model_dump() for p in initial_telemetry])
+            initial_metrics = compute_clickhouse_reward(episode_id, attempt_n=0)
+            clickhouse_client.insert_edit_attempt(
+                episode_id=episode_id,
+                attempt_n=0,
+                action="initial_rough_cut",
+                target_clip_id="",
+                reward=float(initial_metrics.scalar_reward),
+                verdict="initial",
+                reasoning="PPO Training episode starting timeline",
+                reward_v1_mean=initial_metrics.reward_v1_mean,
+                reward_v2_coverage=initial_metrics.reward_v2_coverage,
+                shot_count=initial_metrics.shot_count,
+                duration_seconds=initial_metrics.duration_seconds
+            )
+        else:
+            initial_metrics = compute_local_reward(initial_telemetry, episode_id, expected_shots=4)
+
         self.env.state.last_reward = initial_metrics.scalar_reward
-        
-        clickhouse_client.insert_edit_attempt(
-            episode_id=episode_id,
-            attempt_n=0,
-            action="initial_rough_cut",
-            target_clip_id="",
-            reward=float(initial_metrics.scalar_reward),
-            verdict="initial",
-            reasoning="PPO Training episode starting timeline"
-        )
         return float(initial_metrics.scalar_reward)

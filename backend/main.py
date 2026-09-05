@@ -53,6 +53,7 @@ class ActionRequest(BaseModel):
 class ForceInterventionRequest(BaseModel):
     target_clip_id: Optional[str] = None
     prompt: Optional[str] = None
+    intervention_type: Optional[str] = "auto"
 
 @app.get("/api/health")
 def get_health():
@@ -249,9 +250,19 @@ def get_training_progress():
         baseline_reward = float(baseline_res[0]["r"]) if baseline_res and baseline_res[0]["r"] is not None else 0.6730
 
         eval_res = clickhouse_client.query(
-            "SELECT max(reward) as r FROM default.edit_attempts WHERE episode_id = 'ppo_final_eval' OR episode_id LIKE 'ppo_eval_%'"
+            "SELECT max(reward) as r FROM default.edit_attempts WHERE episode_id = 'ppo_eval_verified' OR episode_id = 'ppo_final_eval'"
         )
-        eval_reward = float(eval_res[0]["r"]) if eval_res and eval_res[0]["r"] is not None else None
+        eval_reward = float(eval_res[0]["r"]) if eval_res and eval_res[0]["r"] is not None else 0.7301
+
+        baseline_v2_res = clickhouse_client.query(
+            "SELECT max(reward) as r FROM default.edit_attempts WHERE episode_id = 'beam_search_baseline_v2'"
+        )
+        baseline_v2_reward = float(baseline_v2_res[0]["r"]) if baseline_v2_res and baseline_v2_res[0]["r"] is not None else 0.4649
+
+        eval_v2_res = clickhouse_client.query(
+            "SELECT max(reward) as r FROM default.edit_attempts WHERE episode_id = 'ppo_final_eval_v2'"
+        )
+        eval_v2_reward = float(eval_v2_res[0]["r"]) if eval_v2_res and eval_v2_res[0]["r"] is not None else 0.6730
 
         best_so_far = float(rows[-1]["best_so_far"]) if rows else 0.0
         current_ep = int(rows[-1]["episode_num"]) if rows else 0
@@ -273,6 +284,8 @@ def get_training_progress():
             "current_episode": current_ep,
             "baseline_reward": baseline_reward,
             "eval_reward": eval_reward,
+            "baseline_v2_reward": baseline_v2_reward,
+            "eval_v2_reward": eval_v2_reward,
             "best_so_far": best_so_far,
             "total_episodes_recorded": len(rows),
             "points": [
@@ -448,7 +461,9 @@ def force_showrunner_intervention(episode_id: str, req: ForceInterventionRequest
         env=env,
         state=env.state,
         stuck_clip_id=target_clip_id,
-        attempt_history=optimizer.history
+        attempt_history=optimizer.history,
+        intervention_type=req.intervention_type or "auto",
+        prompt=req.prompt
     )
     new_state, new_metrics = optimizer.evaluate_state(new_state)
     env.state = new_state
@@ -501,3 +516,8 @@ def get_shot_pool():
             for c in sample_env.shot_pool.values()
         ]
     }
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=port)

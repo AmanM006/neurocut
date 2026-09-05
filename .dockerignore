@@ -1,0 +1,29 @@
+# Docker Ignore for Neuro-Cut
+.git
+.gitignore
+README.md
+LICENSE
+
+# Node / Next.js
+frontend/node_modules
+frontend/.next
+frontend/.turbo
+frontend/tsconfig.tsbuildinfo
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+.pytest_cache
+*.egg-info
+venv
+.venv
+env
+
+# Temporary artifacts and caches
+backend/data/compiled_cuts/*
+!backend/data/compiled_cuts/.gitkeep
+backend/data/broll/*
+!backend/data/broll/.gitkeep
+*.log
+scratch/

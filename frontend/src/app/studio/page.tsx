@@ -17,7 +17,8 @@ import {
   RotateCcw,
   Clock,
   Database,
-  Users2
+  Users2,
+  Eye
 } from "lucide-react";
 import { VideoPreview } from "@/components/VideoPreview";
 import { TelemetryChart } from "@/components/TelemetryChart";
@@ -253,15 +254,22 @@ export default function StudioPage() {
     }
   };
 
-  // Force Showrunner B-Roll Intervention
-  const handleForceIntervention = async () => {
+  // Force Showrunner Intervention (3 Archetypes)
+  const handleForceIntervention = async (interventionType: string = "cutaway") => {
     if (isRunning) return;
     try {
-      addLog("action", "Manual Showrunner Override Triggered", "Prompting Veo/Imagen for cutaway injection...");
+      const typeLabel =
+        interventionType === "establishing"
+          ? "Atmospheric Establishing"
+          : interventionType === "reaction"
+          ? "Psychological Reaction"
+          : "Veo 3.1 Cutaway";
+
+      addLog("action", `Manual Showrunner Intervention: ${typeLabel}`, `Dispatching ${interventionType} synthesis via Gemini & Veo...`);
       const res = await fetch(`/api/episodes/${episodeId}/showrunner/force-intervention`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ intervention_type: interventionType }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -272,7 +280,7 @@ export default function StudioPage() {
 
         addLog(
           "intervention",
-          `Showrunner Intervention Injected: ${interv.broll_clip_id}`,
+          `Showrunner ${typeLabel} Injected: ${interv.broll_clip_id}`,
           `Reasoning: ${interv.reasoning}\nPrompt: "${interv.broll_prompt}"`,
           data.reward
         );
@@ -498,14 +506,35 @@ export default function StudioPage() {
                   <span>Step Action</span>
                 </button>
 
-                <button
-                  onClick={handleForceIntervention}
-                  disabled={isRunning}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-600/15 hover:bg-indigo-600/25 text-indigo-300 hover:text-white border border-indigo-500/30 transition-colors disabled:opacity-50 text-xs font-medium"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Inject Veo B-Roll</span>
-                </button>
+                <div className="pt-1 pb-0.5">
+                  <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1 font-mono">Showrunner Interventions</div>
+                  <div className="grid grid-cols-3 gap-1 text-[11px]">
+                    <button
+                      onClick={() => handleForceIntervention("cutaway")}
+                      disabled={isRunning}
+                      className="px-1.5 py-1 rounded-md bg-indigo-600/15 hover:bg-indigo-600/25 text-indigo-300 border border-indigo-500/30 transition-colors disabled:opacity-50 text-center font-medium"
+                      title="Inject Veo 3.1 B-Roll Cutaway"
+                    >
+                      Cutaway
+                    </button>
+                    <button
+                      onClick={() => handleForceIntervention("establishing")}
+                      disabled={isRunning}
+                      className="px-1.5 py-1 rounded-md bg-sky-600/15 hover:bg-sky-600/25 text-sky-300 border border-sky-500/30 transition-colors disabled:opacity-50 text-center font-medium"
+                      title="Inject Wide Establishing Shot"
+                    >
+                      Establish
+                    </button>
+                    <button
+                      onClick={() => handleForceIntervention("reaction")}
+                      disabled={isRunning}
+                      className="px-1.5 py-1 rounded-md bg-purple-600/15 hover:bg-purple-600/25 text-purple-300 border border-purple-500/30 transition-colors disabled:opacity-50 text-center font-medium"
+                      title="Inject Psychological Reaction Close-up"
+                    >
+                      Reaction
+                    </button>
+                  </div>
+                </div>
 
                 <button
                   onClick={handleRunSwarm}
@@ -730,14 +759,43 @@ export default function StudioPage() {
                       <p className="text-xs text-zinc-400 mb-4">Execute AI-driven trims, B-roll synthesis, or sequence swaps</p>
 
                       <div className="space-y-2 text-xs">
-                        <button
-                          onClick={handleForceIntervention}
-                          disabled={isRunning}
-                          className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors disabled:opacity-50"
-                        >
-                          <Sparkles className="w-4 h-4" />
-                          <span>Inject Veo 3.1 B-Roll Cutaway</span>
-                        </button>
+                        <div className="p-2.5 rounded-lg bg-[#0a0a0a] border border-[#222222] space-y-2">
+                          <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium">
+                            <span className="flex items-center gap-1.5 text-indigo-400 font-semibold">
+                              <Sparkles className="w-3.5 h-3.5" /> Showrunner Interventions
+                            </span>
+                            <span className="text-[10px] text-zinc-500 font-mono">Gemini 2.5 + Veo</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            <button
+                              onClick={() => handleForceIntervention("cutaway")}
+                              disabled={isRunning}
+                              className="flex flex-col items-center justify-center p-2 rounded-md bg-indigo-600/15 hover:bg-indigo-600/25 text-indigo-300 hover:text-white border border-indigo-500/30 transition-colors disabled:opacity-50 text-[11px]"
+                              title="Synthesize tense cutaway detail"
+                            >
+                              <Sparkles className="w-3.5 h-3.5 mb-1 text-indigo-400" />
+                              <span className="font-medium">Cutaway</span>
+                            </button>
+                            <button
+                              onClick={() => handleForceIntervention("establishing")}
+                              disabled={isRunning}
+                              className="flex flex-col items-center justify-center p-2 rounded-md bg-sky-600/15 hover:bg-sky-600/25 text-sky-300 hover:text-white border border-sky-500/30 transition-colors disabled:opacity-50 text-[11px]"
+                              title="Synthesize atmospheric wide establishing shot"
+                            >
+                              <Film className="w-3.5 h-3.5 mb-1 text-sky-400" />
+                              <span className="font-medium">Establishing</span>
+                            </button>
+                            <button
+                              onClick={() => handleForceIntervention("reaction")}
+                              disabled={isRunning}
+                              className="flex flex-col items-center justify-center p-2 rounded-md bg-purple-600/15 hover:bg-purple-600/25 text-purple-300 hover:text-white border border-purple-500/30 transition-colors disabled:opacity-50 text-[11px]"
+                              title="Synthesize psychological reaction close-up"
+                            >
+                              <Eye className="w-3.5 h-3.5 mb-1 text-purple-400" />
+                              <span className="font-medium">Reaction</span>
+                            </button>
+                          </div>
+                        </div>
 
                         <button
                           onClick={handleStepOptimization}

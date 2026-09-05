@@ -37,8 +37,12 @@ COPY --from=frontend-builder /app/frontend/public ./frontend/public
 COPY --from=frontend-builder /app/frontend/package*.json ./frontend/
 COPY --from=frontend-builder /app/frontend/node_modules ./frontend/node_modules
 
-# Expose backend port
-EXPOSE 8000
+# Expose ports (Cloud Run defaults to 8080, FastAPI on 8000)
+EXPOSE 8080 8000
 
-# Start script
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Make entrypoint executable
+RUN chmod +x /app/infra/entrypoint.sh
+
+# Start dual service entrypoint
+ENTRYPOINT ["/bin/bash", "/app/infra/entrypoint.sh"]
+

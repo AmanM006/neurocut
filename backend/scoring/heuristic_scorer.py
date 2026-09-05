@@ -22,8 +22,9 @@ class HeuristicScorer:
     Phase 1 Heuristic Scorer.
     Evaluates video timeline engagement, emitting per-shot / temporal telemetry
     (attention, cognitive_load, arousal).
-    Uses Gemini API when available, with a deterministic cinematic pacing engine fallback.
+    Uses Gemini API when available, with deterministic caching and a cinematic pacing engine fallback.
     """
+    _cache: Dict[str, Dict[str, float]] = {}
 
     def __init__(self):
         from backend.config import get_genai_client
@@ -137,6 +138,11 @@ class HeuristicScorer:
 
     def _evaluate_with_gemini(self, state: TimelineState) -> Dict[str, Dict[str, float]]:
         """Invokes Gemini to evaluate sequence pacing and engagement with automatic non-rate-limited fallback."""
+        cache_key = "|".join(f"{c.clip_id}:{c.duration_seconds:.1f}:{c.is_broll}" for c in state.clips)
+        if cache_key in self._cache:
+            print(f"[Scorer] Returning cached deterministic Gemini evaluation for {len(state.clips)} shots.")
+            return self._cache[cache_key]
+
         summary = [
             {
                 "clip_id": c.clip_id,
@@ -156,7 +162,7 @@ class HeuristicScorer:
             '{"scores": {"<clip_id>": {"attention": float, "cognitive_load": float, "arousal": float}}}'
         )
 
-        candidate_models = [settings.GEMINI_MODEL, "gemini-3.5-flash", "gemini-2.5-flash-lite"]
+        candidate_models = [settings.GEMINI_MODEL, "gemini-2.5-flash", "gemini-2.5-flash-lite"]
         # deduplicate while preserving order
         candidate_models = list(dict.fromkeys(candidate_models))
 
@@ -178,6 +184,7 @@ class HeuristicScorer:
                 scores = data.get("scores", {})
                 if scores:
                     print(f"[Scorer] <<< REAL GEMINI API SUCCESS ({model}): Scores received for {list(scores.keys())}")
+                    self._cache[cache_key] = scores
                     return scores
             except Exception as e:
                 print(f"[Scorer] Model {model} attempt failed: {e}")
